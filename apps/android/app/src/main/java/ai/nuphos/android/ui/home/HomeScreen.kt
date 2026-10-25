@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Assignment
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Computer
 import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.FilterList
@@ -468,6 +469,7 @@ fun HomeScreen(
             } else AnimatedContent(current, modifier = Modifier.weight(1f), label = "page") { dest ->
                 when (dest) {
                     HomePage.Agent -> AgentPage(searching = searching, onSearchingChange = { searching = it }, nav = nav, showComposer = showComposer, selectedSessionId = selectedSessionId, newChatComposer = newChatComposer)
+                    HomePage.Runtimes -> ai.nuphos.android.ui.agent.RuntimesPage()
                     HomePage.Plans -> PlansPage(searching = searching, onSearchingChange = { searching = it }, nav = nav)
                     HomePage.Connectors -> ConnectorsPage()
                     HomePage.Monitoring -> MonitoringPage(monitoring, store.selectedTeam?.id, onOpenConnectors = { page = HomePage.Connectors.route })
@@ -530,6 +532,7 @@ internal fun PageSwitcher(
 
 private fun HomePage.icon(selected: Boolean): ImageVector = when (this) {
     HomePage.Agent -> if (selected) Icons.Rounded.AutoAwesome else Icons.Outlined.AutoAwesome
+    HomePage.Runtimes -> Icons.Outlined.Computer
     HomePage.Monitoring -> if (selected) Icons.Rounded.MonitorHeart else Icons.Outlined.MonitorHeart
     HomePage.Triggers -> if (selected) Icons.Rounded.Bolt else Icons.Outlined.Bolt
     HomePage.Plans -> if (selected) Icons.Rounded.Assignment else Icons.Outlined.Assignment

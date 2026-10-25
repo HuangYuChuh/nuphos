@@ -66,6 +66,9 @@ class HomeNavigationFixtureDeviceTest {
     @Volatile private var restoreFailure = false
     @Volatile private var restored = false
     @Volatile private var historyFailure = false
+    @Volatile private var runtimeCatalogHold: CountDownLatch? = null
+    @Volatile private var runtimeCatalogFailure = false
+    @Volatile private var runtimeRemoved = false
     private lateinit var plansStore: PlansStore
     private lateinit var app: NuphosApplication
     private lateinit var agent: AgentStore
@@ -79,7 +82,7 @@ class HomeNavigationFixtureDeviceTest {
         target.javaClass.getDeclaredField(name + if (delegated) "\$delegate" else "").also { it.isAccessible = true }.get(target) as MutableState<Any?>
     private val network = object : ExternalResource() {
         override fun before() {
-            require(InstrumentationRegistry.getInstrumentation().targetContext.packageName == "ai.nuphos.android.navigation1371")
+            require(InstrumentationRegistry.getInstrumentation().targetContext.packageName in setOf("ai.nuphos.android.navigation1371", "ai.nuphos.android.runtimes1373"))
             app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NuphosApplication
             savedConfiguration = Configuration(app.resources.configuration)
             savedMetrics = DisplayMetrics().also { it.setTo(app.resources.displayMetrics) }
@@ -96,6 +99,9 @@ class HomeNavigationFixtureDeviceTest {
             val client = OkHttpClient.Builder().addInterceptor { chain ->
                 val request = chain.request(); requests += request
                 val path = request.url.encodedPath
+                val runtimeCatalog = request.method == "GET" && path in setOf("/teams/${a.id}/agent-runtimes", "/teams/${b.id}/agent-runtimes")
+                val runtimeQuotas = request.method == "GET" && path in setOf("/teams/${a.id}/agent-runtimes/quota", "/teams/${b.id}/agent-runtimes/quota")
+                val devices = request.method == "GET" && path == "/agent/devices" && request.url.queryParameter("teamId") in setOf(a.id,b.id)
                 val teamRead = request.method == "GET" && path == "/teams"
                 val discovery = request.method == "GET" && path == "/teams/discoverable"
                 val favorites = request.method == "GET" && path in setOf("/teams/${a.id}/favorites", "/teams/${b.id}/favorites")
@@ -109,9 +115,15 @@ class HomeNavigationFixtureDeviceTest {
                 val members = request.method == "GET" && path in setOf("/teams/${a.id}/members", "/teams/${b.id}/members")
                 val browsing = request.method == "GET" && path in setOf("/teams/${a.id}/monitoring/overview", "/teams/${a.id}/agent-triggers", "/teams/${a.id}/agent-triggers/scheduler-status", "/teams/${b.id}/monitoring/overview", "/teams/${b.id}/agent-triggers", "/teams/${b.id}/agent-triggers/scheduler-status")
                 val policy = request.method == "GET" && path == "/agent/plan-approval-policy" && request.url.queryParameter("teamId") in setOf(a.id, b.id)
-                if (!teamRead && !discovery && !favorites && !history && !consent && !connectors && !plans && !members && !policy && !browsing && !credentials && !restore && !detail) unexpected += request
+                if (!runtimeCatalog && !runtimeQuotas && !devices && !teamRead && !discovery && !favorites && !history && !consent && !connectors && !plans && !members && !policy && !browsing && !credentials && !restore && !detail) unexpected += request
                 var code = 200
                 val body = when {
+                    runtimeCatalog -> {
+                        check(runtimeCatalogHold?.await(15, TimeUnit.SECONDS) != false)
+                        if (runtimeCatalogFailure) { code = 503; "{}" } else if (runtimeRemoved) "{\"runtimes\":[]}" else """{"runtimes":[{"id":"synthetic-cloud","provider":"codex","label":"Synthetic Cloud","status":"active","kind":"managed"}]}"""
+                    }
+                    runtimeQuotas -> """{"quotas":[]}"""
+                    devices -> """{"devices":[]}"""
                     teamRead -> { """{"teams":${Http.json.encodeToString(ListSerializer(Team.serializer()), memberships)}}""" }
                     discovery -> "{\"teams\":[]}"
                     restore -> {
@@ -214,20 +226,56 @@ class HomeNavigationFixtureDeviceTest {
         val bitmap = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
         try { file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) } } finally { bitmap.recycle() }
     }
-    @Test fun allFivePagesSelectedAndBackReturnFocusWithoutWrites() {
-        render(); waitText("Synthetic active conversation"); shot("normal")
+    @Test fun allSixPagesSelectedAndBackReturnFocusWithoutWrites() {
+        render(keyboard = true); waitText("Synthetic active conversation"); shot("normal")
+        compose.onNodeWithTag("home-page-switcher").performKeyInput { pressKey(androidx.compose.ui.input.key.Key.Tab) }
         menu(); shot("menu")
         compose.waitUntil(5_000) { compose.onAllNodesWithTag("home-page-agent").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("home-page-agent").assertIsSelected()
         Espresso.pressBack(); compose.waitForIdle()
         compose.onNodeWithTag("home-page-menu").assertDoesNotExist()
         compose.onNodeWithTag("home-page-switcher").assertIsFocused()
-        for (route in listOf("monitoring", "triggers", "plans", "connectors", "agent")) {
+        for (route in listOf("runtimes", "monitoring", "triggers", "plans", "connectors", "agent")) {
             select(route); menu()
             compose.onNodeWithTag("home-page-$route").assertIsSelected()
             Espresso.pressBack()
         }
         assertEquals(a.id, agent.selectedTeam?.id); noWrites()
+    }
+    @Test fun repeatedDetailsWaitsForFreshCatalogAndDoesNotManageRemovedRuntime() {
+        render(); waitText("Synthetic active conversation"); select("runtimes")
+        waitText("Cloud and servers")
+        compose.onNodeWithText("Details: Synthetic Cloud").performScrollTo().performClick()
+        waitText("Refresh runtime")
+        Espresso.pressBack(); compose.waitForIdle()
+        runtimeCatalogHold = CountDownLatch(1)
+        try {
+            compose.onNodeWithText("Details: Synthetic Cloud").performScrollTo().performClick()
+            waitText("Manage runtimes")
+            compose.onNodeWithText("Refresh runtime").assertDoesNotExist()
+            compose.onNodeWithText("Save name").assertDoesNotExist()
+            runtimeCatalogFailure = true
+            runtimeCatalogHold!!.countDown()
+            waitText("We could not confirm the runtime result. Refresh saved state before continuing.")
+            compose.onNodeWithText("Refresh runtime").assertDoesNotExist()
+            compose.onNodeWithText("Save name").assertDoesNotExist()
+            runtimeCatalogFailure = false; runtimeRemoved = true
+            compose.onNodeWithText("Retry runtime list").performScrollTo().performClick()
+            compose.waitUntil(8_000) { compose.onAllNodesWithText("This runtime is unavailable.").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("Save name").assertDoesNotExist()
+            noWrites()
+        } finally { runtimeCatalogHold?.countDown() }
+    }
+    @Test fun runtimesDestinationAndExistingManageSheetPreserveComposerSelectionAndWorkspace() {
+        render(); waitText("Synthetic active conversation"); select("runtimes")
+        waitText("Cloud and servers")
+        compose.onNodeWithText("Details: Synthetic Cloud").performScrollTo().performClick()
+        compose.waitUntil(8_000) { compose.onAllNodesWithText("Refresh runtime").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Save name").assertIsNotEnabled()
+        Espresso.pressBack(); compose.waitForIdle()
+        assertEquals(a.id, agent.selectedTeam?.id)
+        assertNull(auth.runtimeSelections.bind(NuphosUser.preview.id, a.id).selectedId)
+        select("agent"); waitText("Synthetic active conversation"); noWrites()
     }
     @Test fun archiveCheckboxQueriesAndPageSwitchRetainsFilterButPlansIsIndependent() {
         render(); waitText("Synthetic active conversation")
@@ -276,7 +324,7 @@ class HomeNavigationFixtureDeviceTest {
     }
     @Test fun compactRtlLargeFontAllEntriesAndCheckboxRemainReachable() {
         render(compact = true); menu(); shot("rtl-large-menu")
-        for (route in listOf("agent", "monitoring", "triggers", "plans", "connectors"))
+        for (route in listOf("agent", "runtimes", "monitoring", "triggers", "plans", "connectors"))
             compose.onNodeWithTag("home-page-$route").performScrollTo().assertIsDisplayed()
         Espresso.pressBack(); filter()
         compose.onNodeWithTag("filter-archived").performScrollTo().assertIsOff()

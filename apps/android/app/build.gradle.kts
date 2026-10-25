@@ -51,6 +51,10 @@ android {
 
     buildTypes {
         debug {
+            if (providers.gradleProperty("nuphosIsolatedRuntimesFixture").orNull == "true") {
+                applicationIdSuffix = ".runtimes1373"
+                manifestPlaceholders["contentInputFixtureAuthority"] = "ai.nuphos.runtimes1373.test.contentinput"
+            }
             if (providers.gradleProperty("nuphosIsolatedPersistentShareFixture").orNull == "true") {
                 applicationIdSuffix = ".sharepersist1359"
                 manifestPlaceholders["contentInputFixtureAuthority"] = "ai.nuphos.sharepersist1359.test.contentinput"
