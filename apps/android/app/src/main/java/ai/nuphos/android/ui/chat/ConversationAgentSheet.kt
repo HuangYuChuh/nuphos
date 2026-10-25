@@ -6,6 +6,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import ai.nuphos.android.data.AgentRuntime
 import ai.nuphos.android.data.AgentRuntimeApi
@@ -57,8 +58,13 @@ internal fun ConversationAgentSheet(
             }
         }
     }
-    ModalBottomSheet(onDismissRequest = { if (!session.movingAgent) onDismiss() }) {
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 32.dp),
+    // Keep one expanded anchor and a stable viewport while the catalog loads or changes.
+    // Content remains scrollable on short screens and with large text.
+    ModalBottomSheet(
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        onDismissRequest = { if (!session.movingAgent) onDismiss() },
+    ) {
+        Column(Modifier.testTag("conversation-runtime-sheet").fillMaxWidth().fillMaxHeight().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Runtime", style = MaterialTheme.typography.titleLarge)
             Text(session.runtimeDeviceLabel ?: "Current runtime", style = MaterialTheme.typography.titleMedium)
@@ -74,6 +80,7 @@ internal fun ConversationAgentSheet(
                 choices?.forEach { target ->
                     val selected = target.id == session.runtimeId
                     OutlinedButton(
+                        shape = MaterialTheme.shapes.medium,
                         enabled = !refreshing && session.canMoveAgent && target.selectable,
                         onClick = {
                             if (selected) onDismiss()

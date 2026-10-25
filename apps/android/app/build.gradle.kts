@@ -51,6 +51,10 @@ android {
 
     buildTypes {
         debug {
+            if (providers.gradleProperty("nuphosIsolatedRuntimeSheetFixture").orNull == "true") {
+                applicationIdSuffix = ".runtimesheet1375"
+                manifestPlaceholders["contentInputFixtureAuthority"] = "ai.nuphos.runtimesheet1375.test.contentinput"
+            }
             if (providers.gradleProperty("nuphosIsolatedRuntimesFixture").orNull == "true") {
                 applicationIdSuffix = ".runtimes1373"
                 manifestPlaceholders["contentInputFixtureAuthority"] = "ai.nuphos.runtimes1373.test.contentinput"
