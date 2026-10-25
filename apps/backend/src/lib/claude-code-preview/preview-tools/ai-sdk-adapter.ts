@@ -1,13 +1,13 @@
 // Turns AI SDK tools (the classic agent's `tool({ inputSchema, execute })`
-// objects) into an MCP tool module. Each call also publishes the same
-// tool-input-available / tool-output-available frames the classic loop emits,
-// under the ORIGINAL tool name, so the desktop renders its cards unchanged.
+// objects) into an MCP tool module. The runtime owns their visible card: its
+// ACP id survives approval, execution and history, without a second handler card.
 import { randomUUID } from 'node:crypto'
 
 import { zodToJsonSchema } from 'zod-to-json-schema'
 
 import { toolError, toolResult } from '@/lib/mcp/protocol'
 
+import { TOOL_PRESENTATION, TOOL_PRESENTATION_ID } from '../preview-tool-presentation'
 import { publishPreviewFrame } from '../run-frame-bridge'
 
 import type {
@@ -106,7 +106,11 @@ function adaptExecute(
         // Frames are best-effort UI; the tool result itself still reaches the agent.
       })
 
-    await emit({ type: 'tool-input-available', toolCallId, toolName: name, input: args })
+    // New hosting turns consume these marked frames and present only the ACP id.
+    // Old replicas still receive the standard pair during a rolling upgrade.
+    const presentation = { [TOOL_PRESENTATION]: 'runtime', toolName: name }
+
+    await emit({ type: 'tool-input-available', toolCallId, input: args, ...presentation })
     try {
       // Unlike the AI SDK loop, the MCP protocol dispatcher does not parse
       // arguments against the advertised schema. Do that here so required
@@ -119,15 +123,26 @@ function adaptExecute(
         abortSignal: new AbortController().signal,
       })
 
-      await emit({ type: 'tool-output-available', toolCallId, output: output ?? null })
+      await emit({
+        type: 'tool-output-available',
+        toolCallId,
+        output: output ?? null,
+        ...presentation,
+      })
 
-      return toolResult(output ?? null)
+      return {
+        ...toolResult(output ?? null),
+        _meta: { [TOOL_PRESENTATION]: 'runtime', [TOOL_PRESENTATION_ID]: toolCallId },
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
 
-      await emit({ type: 'tool-output-error', toolCallId, errorText: message })
+      await emit({ type: 'tool-output-error', toolCallId, errorText: message, ...presentation })
 
-      return toolError(message)
+      return {
+        ...toolError(message),
+        _meta: { [TOOL_PRESENTATION]: 'runtime', [TOOL_PRESENTATION_ID]: toolCallId },
+      }
     }
   }
 }
