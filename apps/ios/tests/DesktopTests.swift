@@ -80,6 +80,7 @@ struct DesktopTests {
         var cursor: RFBCursor?
         var pointer: (Int, Int)?
         var size: (Int, Int)?
+        var updates: [(bytes: Int, consumed: Int)] = []
     }
 
     static func be16(_ value: Int) -> [UInt8] { [UInt8(value >> 8), UInt8(value & 0xFF)] }
@@ -98,7 +99,8 @@ struct DesktopTests {
             frame: { recorder.frames.append($0) },
             cursor: { recorder.cursor = $0 },
             pointer: { recorder.pointer = ($0, $1) },
-            clipboard: { _ in }
+            clipboard: { _ in },
+            update: { bytes, _, consumed in recorder.updates.append((bytes, consumed)) }
         ))
         var server = Array("RFB 003.008\n".utf8) + [1, 1] + be32(0)
         server += be16(80) + be16(4) + [UInt8](repeating: 0, count: 16) + be32(3) + Array("Box".utf8)
@@ -122,6 +124,7 @@ struct DesktopTests {
         } catch is RFBByteStream.Closed {}
 
         precondition(recorder.size! == (80, 4))
+        precondition(recorder.updates.count == 1 && recorder.updates[0].consumed == server.count, "One update, reported once all its bytes were read")
         var expected = Array("RFB 003.008\n".utf8) + [1, 1] + RFBClient.pixelFormat
         expected += [2, 0] + be16(RFBClient.encodings.count) + RFBClient.encodings.flatMap { be32(Int($0)) }
         expected += RFBClient.updateRequest(incremental: false, width: 80, height: 4)

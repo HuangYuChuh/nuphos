@@ -119,6 +119,13 @@ struct DesktopScreen: View {
                     .font(Theme.Text.micro)
                     .foregroundStyle(.white.opacity(0.55))
                     .lineLimit(1)
+                #if DEBUG
+                if !desktop.stats.isEmpty {
+                    Text(verbatim: desktop.stats)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.45))
+                }
+                #endif
             }
             Spacer()
         }
