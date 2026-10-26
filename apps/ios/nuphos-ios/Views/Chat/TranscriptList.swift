@@ -45,7 +45,7 @@ final class TranscriptController: UIViewController, UICollectionViewDelegate, Ch
     private var positioned = false
     private var applying = false
     private var pending: (() -> Void)?
-    private var previousSize = CGSize.zero
+    private var previousFrame = CGRect.zero
     private let composer = UIHostingController(rootView: AnyView(EmptyView()))
     let placeholder = UIHostingController(rootView: AnyView(EmptyView()))
     private lazy var composerHeight = composer.view.heightAnchor.constraint(equalToConstant: 0)
@@ -198,10 +198,9 @@ final class TranscriptController: UIViewController, UICollectionViewDelegate, Ch
             view.keyboardLayoutGuide.keyboardDismissPadding = height
         }
         let size = collection.bounds.size
-        guard size.width > 0, size.height > 0, size != previousSize else { return }
-        previousSize = size
+        guard size.width > 0, size.height > 0, size != previousFrame.size else { return }
+        previousFrame.size = size
         if !positioned || following {
-            // Inside the keyboard's animation, so the rows travel with it.
             positionAtEnd()
         }
         animatePendingSend()
@@ -573,6 +572,33 @@ final class TranscriptController: UIViewController, UICollectionViewDelegate, Ch
             eventProbe.stop()
             check(name, down < 1 && nearBottom, "maxDownward=\(down) frames=\(frames) nearBottom=\(nearBottom)")
         }
+        // The header can shrink or hide while a finger is still down (iOS 27
+        // minimizes the navigation bar on scroll on iPhone Duo). Nothing has
+        // settled yet, so the reader may still count as following; the
+        // transcript must stay where the finger put it.
+        fixture = fixture0
+        apply()
+        showLatest()
+        await pause()
+        if let navigation = navigationController {
+            // A finger goes down and moves up 20 pt; it has not lifted yet.
+            scrollViewWillBeginDragging(collection)
+            collection.contentOffset.y -= 20
+            func rowY() -> CGFloat {
+                guard let path = collection.indexPathsForVisibleItems.max(), let cell = collection.cellForItem(at: path) else { return .nan }
+                return cell.convert(cell.bounds, to: nil).minY
+            }
+            let before = rowY()
+            navigation.setNavigationBarHidden(true, animated: false)
+            await pause()
+            let away = distanceToEnd, after = rowY()
+            navigation.setNavigationBarHidden(false, animated: false)
+            await pause()
+            check("header_hides_mid_drag", abs(away - 20) < 1 && abs(after - before) < 1,
+                  "distanceToEnd=\(away) rowY before=\(before) after=\(after)")
+        } else {
+            check("header_hides_mid_drag", false, "no navigation controller")
+        }
         check("suite_complete", true, "")
     }
     #endif
@@ -700,7 +726,19 @@ private final class TranscriptFrameProbe: NSObject {
     func stop() { link?.invalidate(); link = nil }
 }
 
-struct TranscriptRegressionScreen: UIViewControllerRepresentable {
+/// Hosted like the chat page: in a navigation stack, under its header.
+struct TranscriptRegressionScreen: View {
+    var body: some View {
+        NavigationStack {
+            TranscriptRegressionController()
+                .ignoresSafeArea(.all, edges: .bottom)
+                .navigationTitle("Scroll regression")
+                .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+}
+
+private struct TranscriptRegressionController: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> TranscriptController {
         let controller = TranscriptController()
         Task { @MainActor [weak controller] in
