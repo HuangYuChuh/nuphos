@@ -85,6 +85,24 @@ class ChatSession(
     val linkedResources = SessionResourcesStore { NuphosApi.sessionResources(token, teamId, sessionId) }
     suspend fun refreshResources() = linkedResources.refresh { hasAiAccess && loaded && loadError == null }
     val canReadAttachments get() = hasAiAccess
+    var downloads by mutableStateOf<List<ai.nuphos.android.data.TransferDownloadGroup>>(emptyList())
+        private set
+    var downloadsError by mutableStateOf<String?>(null)
+        private set
+    var timelineEvents by mutableStateOf<List<AgentConversationDetail.TimelineEvent>>(emptyList())
+        private set
+    val canReadDownloads get() = hasAiAccess && !browsingOnly && loaded && loadError == null && isOwner
+    suspend fun refreshDownloads() {
+        if (!canReadDownloads) { downloads = emptyList(); downloadsError = null; return }
+        val generation = detailLoadGeneration
+        try {
+            val result = ai.nuphos.android.data.TransferDownloads.list(token, teamId, sessionId)
+            if (canReadDownloads && generation == detailLoadGeneration) { downloads = result; downloadsError = null }
+        } catch (error: CancellationException) { throw error }
+        catch (_: Exception) {
+            if (canReadDownloads && generation == detailLoadGeneration) downloadsError = "Could not refresh agent files."
+        }
+    }
 
     suspend fun transferGroup(groupId: String): ai.nuphos.android.data.TransferDownloadGroup {
         check(hasAiAccess) { "Attachment access unavailable" }
@@ -740,7 +758,9 @@ class ChatSession(
         if (watchReadRevision == watchRevision) watching = detail.watching
         isArchived = detail.archivedAt != null
         readOnly = browsingOnly || (detail.readOnly ?: false)
+        timelineEvents = detail.timelineEvents
         isOwner = detail.isOwner ?: false
+        if (!isOwner) { downloads = emptyList(); downloadsError = null }
         manages = detail.canManage ?: isOwner
         hasActiveRun = detail.activeRun != null
         canCancelRun = detail.canCancelRun ?: false
@@ -1352,6 +1372,9 @@ class ChatSession(
 
     /** Revoke local work and unsent copies without cancelling the server run. */
     fun disposeForConsent() {
+        downloads = emptyList()
+        downloadsError = null
+        timelineEvents = emptyList()
         modelScopeActive = false
         resetModelSettings()
         initialModelPick = null

@@ -39,7 +39,7 @@ import ai.nuphos.android.ui.components.NuphosAvatar
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProfileSheet(user: NuphosUser, onDismiss: () -> Unit) {
+fun ProfileSheet(user: NuphosUser, workspaceName: String? = null, onWorkspace: (() -> Unit)? = null, onDismiss: () -> Unit) {
     val voiceContext = androidx.compose.ui.platform.LocalContext.current
     val injectedVoice = ai.nuphos.android.voice.LocalVoiceServices.current
     val voiceServices = remember(voiceContext, injectedVoice) { injectedVoice ?: ai.nuphos.android.voice.deviceVoiceServices(voiceContext) }
@@ -50,6 +50,9 @@ fun ProfileSheet(user: NuphosUser, onDismiss: () -> Unit) {
     var withdraw by remember(user.id) { mutableStateOf(false) }
     val uri = LocalUriHandler.current
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        if (onWorkspace != null) TextButton(onClick = onWorkspace, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
+            Text((workspaceName ?: "Workspace") + " · Switch workspace")
+        }
         ProfileContent(
             user = user,
             canWithdraw = auth.aiAllowed,

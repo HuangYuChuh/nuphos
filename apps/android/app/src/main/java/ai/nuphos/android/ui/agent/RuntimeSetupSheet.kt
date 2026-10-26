@@ -34,7 +34,7 @@ import ai.nuphos.android.session.RuntimeSetupStore
 fun RuntimeSetupSheet(store: RuntimeSetupStore, onDismiss: () -> Unit,
     launchBrowser: ((String) -> Unit)? = null,
     quotas: Map<String, ai.nuphos.android.data.RuntimeQuota> = emptyMap(),
-    initialManaging: Boolean = false, initialRuntimeId: String? = null) {
+    initialManaging: Boolean = false, initialRuntimeId: String? = null, devices: List<ai.nuphos.android.data.RuntimeDevice> = emptyList()) {
     var label by remember { mutableStateOf("") }
     var provider by remember { mutableStateOf("codex") }
     var code by remember { mutableStateOf("") }
@@ -91,51 +91,10 @@ fun RuntimeSetupSheet(store: RuntimeSetupStore, onDismiss: () -> Unit,
                 if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                 if (selection.reselectionRequired) Text("The selected runtime is unavailable. Select a saved active runtime before starting a new agent.")
                 if (!managing) {
-                    val groups = listOf(
-                        "Computers" to selection.catalog.filter { it.kind == "local" },
-                        "Cloud and servers" to selection.catalog.filter { it.kind != "local" },
-                    )
-                    groups.filter { it.second.isNotEmpty() }.forEach { (title, runtimes) ->
-                        Text(title, style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        runtimes.forEach { runtime ->
-                            val selected = selection.selectedId == runtime.id
-                            val enabled = !state.busy && state.catalogLoaded && runtime.selectable
-                            val providerName = when (runtime.provider) {
-                                "codex" -> "Codex"
-                                "claude-code" -> "Claude Code"
-                                else -> runtime.provider
-                            }
-                            val description = if (selected) "Selected ${runtime.label}" else "Use ${runtime.label}"
-                            Surface(
-                                onClick = { code = ""; store.select(runtime.id) },
-                                enabled = enabled,
-                                modifier = Modifier.fillMaxWidth().semantics { contentDescription = description; this.selected = selected; role = Role.RadioButton },
-                                shape = RoundedCornerShape(16.dp),
-                                color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
-                                border = BorderStroke(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
-                            ) {
-                                Row(Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    Icon(if (runtime.kind == "local") Icons.Outlined.Computer else Icons.Outlined.Cloud,
-                                        contentDescription = null, modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        Text(runtime.label, style = MaterialTheme.typography.titleMedium,
-                                            maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                        Text("$providerName · ${if (selected) "Selected" else runtime.status.replaceFirstChar { it.uppercase() }}",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        RuntimeUsage(quotas[runtime.id])
-                                    }
-                                    RadioButton(selected = selected, onClick = null, enabled = enabled)
-                                }
-                            }
-                            TextButton(onClick = { detailId = runtime.id }, enabled = !state.busy && state.catalogLoaded) {
-                                Text("Details for ${runtime.label}")
-                            }
-                        }
-                    }
+                    RuntimeChoiceList(selection.catalog, selection.selectedId, quotas,
+                        enabled = !state.busy && state.catalogLoaded, devices = devices,
+                        onDetail = { runtime -> detailId = runtime.id },
+                        onSelect = { runtime -> code = ""; store.select(runtime.id) })
                     if (state.catalogLoaded && selection.catalog.isEmpty()) Text("No saved runtimes.")
                     OutlinedButton(onClick = { store.refresh() }, enabled = !state.busy) { Text("Refresh runtimes") }
                 } else {

@@ -12,6 +12,7 @@ object ConversationNesting {
         val threads: Int,
         val folded: Boolean,
         val hidden: List<AgentConversation> = emptyList(),
+        val trail: List<Boolean> = emptyList(),
     )
     data class Result(val rows: List<Row>, val loadedPinnedIds: Set<String>)
 
@@ -74,17 +75,20 @@ object ConversationNesting {
         }
         val hiddenRoot = mutableMapOf<String, String>()
         val hiddenChildren = mutableMapOf<String, MutableList<AgentConversation>>()
+        val trails = mutableMapOf<String, List<Boolean>>()
         val visible = mutableListOf<Row>()
         for (row in order) {
             val id = row.sessionId
             val p = parent[id]
+            trails[id] = if (p == null) emptyList() else
+                (trails[p].orEmpty() + (finalChildren[p]?.lastOrNull()?.sessionId != id)).take(4)
             val foldedRoot = hiddenRoot[p] ?: p?.takeIf { it in folded }
             if (foldedRoot != null) {
                 hiddenRoot[id] = foldedRoot
                 hiddenChildren.getOrPut(foldedRoot) { mutableListOf() }.add(row)
                 continue
             }
-            visible += Row(row, sections.getValue(id), depths.getValue(id), counts[id] ?: 0, id in folded)
+            visible += Row(row, sections.getValue(id), depths.getValue(id), counts[id] ?: 0, id in folded, trail = trails[id].orEmpty())
         }
         val displayed = if (groupSections) Section.entries.flatMap { section -> visible.filter { it.section == section } } else visible
         return Result(displayed.map { it.copy(hidden = hiddenChildren[it.conversation.sessionId].orEmpty()) },

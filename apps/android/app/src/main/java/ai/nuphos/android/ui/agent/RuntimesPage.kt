@@ -59,7 +59,7 @@ fun RuntimesPage() {
             onRuntime = { runtimeId = it; managing = true })
         if (managing && setup.isSourceCurrent()) RuntimeSetupSheet(setup, onDismiss = {
             managing = false; runtimeId = null; observations.refresh()
-        }, quotas = observations.quotas, initialManaging = true, initialRuntimeId = runtimeId)
+        }, quotas = observations.quotas, initialManaging = true, initialRuntimeId = runtimeId, devices = observations.devices)
         }
     }
 }

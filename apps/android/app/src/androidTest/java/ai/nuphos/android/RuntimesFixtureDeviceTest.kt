@@ -65,7 +65,7 @@ class RuntimesFixtureDeviceTest {
     @Test fun catalogQuotaOfflineAndExactDetailCallbacks() {
         render()
         compose.onNodeWithText("Cloud and servers").assertIsDisplayed()
-        compose.onNodeWithText("Weekly: 38% used").assertExists()
+        compose.onNodeWithText("Weekly: 62% left").assertExists()
         shot("runtimes-normal.png")
         compose.onNodeWithText("Details: Synthetic Cloud").performScrollTo().performClick()
         assertEquals("cloud", details)

@@ -389,26 +389,13 @@ fun HomeScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    // A tonal pill with a chevron, so the workspace name reads as a
-                    // switcher rather than a static title.
-                    TextButton(
-                        onClick = { showWorkspaces = true },
-                        colors = ButtonDefaults.textButtonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            contentColor = MaterialTheme.colorScheme.onSurface,
-                        ),
-                        contentPadding = PaddingValues(start = 14.dp, end = 8.dp),
-                    ) {
-                        Text(
-                            store.selectedTeam?.name ?: "Choose workspace",
-                            style = MaterialTheme.typography.titleSmall,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false),
-                        )
-                        Spacer(Modifier.width(2.dp))
-                        Icon(Icons.Outlined.ExpandMore, contentDescription = null, modifier = Modifier.size(18.dp))
-                    }
+                    PageSwitcher(selected = current, onSelect = {
+                        if (it != current) {
+                            if (current == HomePage.Agent) store.updateSearch("")
+                            if (current == HomePage.Plans) plans.search = ""
+                            page = it.route; searching = false
+                        }
+                    })
                     DropdownMenu(showWorkspaces, onDismissRequest = { showWorkspaces = false }) {
                         store.teams.forEach { team ->
                             DropdownMenuItem(text = { Text(team.name) }, onClick = {
@@ -448,18 +435,6 @@ fun HomeScreen(
                 .padding(padding)
                 .consumeWindowInsets(padding),
         ) {
-            PageSwitcher(
-                selected = current,
-                onSelect = {
-                    if (it != current) {
-                        if (current == HomePage.Agent) store.updateSearch("")
-                        if (current == HomePage.Plans) plans.search = ""
-                        page = it.route
-                        searching = false
-                    }
-                },
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-            )
             if (store.selectedTeam == null && store.teamsPhase == AgentStore.Phase.Loaded) {
                 Column(Modifier.fillMaxWidth().weight(1f).padding(20.dp), verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally) {
@@ -482,7 +457,7 @@ fun HomeScreen(
     }
     if (showSetup) WorkspaceSetupSheet(setup) { showSetup = false }
     if (showProfile) {
-        ProfileSheet(user = user, onDismiss = { showProfile = false })
+        ProfileSheet(user = user, onDismiss = { showProfile = false }, workspaceName = store.selectedTeam?.name, onWorkspace = { showProfile = false; showWorkspaces = true })
     }
 }
 

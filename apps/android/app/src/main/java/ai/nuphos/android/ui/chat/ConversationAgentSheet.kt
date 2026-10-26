@@ -27,6 +27,7 @@ internal fun ConversationAgentSheet(
     onDismiss: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
+    val devices = ai.nuphos.android.ui.agent.rememberRuntimeDevices(token, session.teamId)
     var catalog by remember(session) { mutableStateOf<List<AgentRuntime>?>(null) }
     var error by remember(session) { mutableStateOf<String?>(null) }
     var refreshing by remember(session) { mutableStateOf(false) }
@@ -77,24 +78,12 @@ internal fun ConversationAgentSheet(
                 if (refreshing) LinearProgressIndicator(Modifier.fillMaxWidth())
                 val choices = catalog?.filter { session.isOwner || it.kind == "managed" }
                 if (choices != null && choices.isEmpty()) Text("No available runtimes.")
-                choices?.forEach { target ->
-                    val selected = target.id == session.runtimeId
-                    OutlinedButton(
-                        shape = MaterialTheme.shapes.medium,
-                        enabled = !refreshing && session.canMoveAgent && target.selectable,
-                        onClick = {
-                            if (selected) onDismiss()
-                            else if (target.kind == "local") pendingLocal = target
-                            else move(target)
-                        }, modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                            Text(target.label + if (selected) " · Selected" else "")
-                            Text("${target.provider} · ${if (target.signedIn == false) "Sign in required on your computer" else target.status}", style = MaterialTheme.typography.bodySmall)
-                            RuntimeUsage(quotas[target.id])
-                        }
-                    }
-                }
+                if (choices != null) ai.nuphos.android.ui.agent.RuntimeChoiceList(choices, session.runtimeId, quotas,
+                    enabled = !refreshing && session.canMoveAgent, devices = devices, onSelect = { target ->
+                        if (target.id == session.runtimeId) onDismiss()
+                        else if (target.kind == "local") pendingLocal = target
+                        else move(target)
+                    })
                 TextButton(enabled = !refreshing && !session.movingAgent, onClick = { refresh++ }) { Text("Refresh runtimes") }
             }
             TextButton(enabled = !session.movingAgent, onClick = onDismiss) { Text("Done") }

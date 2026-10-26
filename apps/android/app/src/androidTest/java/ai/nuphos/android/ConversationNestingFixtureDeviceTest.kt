@@ -146,7 +146,7 @@ class ConversationNestingFixtureDeviceTest {
         compose.onNodeWithText("Synthetic child").assertDoesNotExist()
         compose.onNodeWithText("My agents").assertDoesNotExist()
         compose.onNodeWithText("Shared").assertDoesNotExist()
-        compose.onNodeWithText("Unread").assertExists()
+        compose.onNode(SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription, "Unread reply")).assertExists()
         shot("collapsed")
         compose.onNodeWithContentDescription("Show 2 sub-agents").performClick()
         compose.onNodeWithText("Synthetic child").assertExists()

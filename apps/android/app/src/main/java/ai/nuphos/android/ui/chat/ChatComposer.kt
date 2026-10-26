@@ -59,6 +59,9 @@ import androidx.compose.foundation.text.input.InputTransformation
 import androidx.compose.foundation.text.input.KeyboardActionHandler
 import kotlinx.coroutines.Job
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.outlined.ContentPaste
+import androidx.compose.material.icons.outlined.Photo
+import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Close
@@ -139,8 +142,8 @@ import kotlin.math.abs
 
 /**
  * Collapsed this is a single-line capsule; once focused (or holding
- * text/attachments) it opens into rows: a drag handle, optional controls,
- * the input on its own line, attachment tiles, then + and send/stop.
+ * text/attachments) it opens into runtime controls, the input on its own line,
+ * attachment tiles, then Photos/Files/Paste and send/stop.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -569,21 +572,6 @@ fun ChatComposer(
             if (rejectedSubmission != null) Text("A rejected message is retained. Clear this draft to restore it.", modifier = Modifier.padding(horizontal = 12.dp))
             if (picking) Text("Reading files…", modifier = Modifier.padding(horizontal = 12.dp))
             (pickerError ?: storageError)?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 12.dp)) }
-            AnimatedVisibility(
-                visible = expanded,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically(),
-            ) {
-                ComposerDragHandle(
-                    modifier = Modifier.composerCollapseGesture(
-                        onDrag = { handleDrag = it },
-                        onCollapse = {
-                            handleDrag = 0f
-                            collapse()
-                        },
-                    ),
-                )
-            }
 
             if (showControls) {
                 AnimatedVisibility(
@@ -598,6 +586,8 @@ fun ChatComposer(
                             .padding(horizontal = 12.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
+                        if (onChooseAgent != null || agentLabel != null) AgentChip(agent, enabled = agentEnabled,
+                            onClick = onChooseAgent ?: { showAgentUsage = true }, labelOverride = agentLabel)
                         if (modelSettings != null) FilterChip(
                             selected = modelSettings.pending.isNotEmpty(),
                             onClick = { showModel = true },
@@ -606,7 +596,7 @@ fun ChatComposer(
                         FilterChip(
                             selected = !resolvedSelection.isEmpty,
                             onClick = { showIam = true },
-                            label = { Text(if (resolvedSelection.isEmpty) "IAM" else "IAM · ${resolvedSelection.count}") },
+                            label = { Text(if (resolvedSelection.isEmpty) "Credentials" else "Credentials · ${resolvedSelection.count}") },
                             leadingIcon = { Icon(Icons.Outlined.Key, contentDescription = null, modifier = Modifier.size(16.dp)) },
                         )
                         FilterChip(
@@ -681,7 +671,11 @@ fun ChatComposer(
                         }
                     },
                 )
-
+                if (!expanded) {
+                    VoiceMic(enabled = canSubmit && effectiveDraftingEnabled && !picking && !voice.active, onClick = ::startVoice)
+                    TrailingButton(isStreaming = isStreaming, hasPayload = hasPayload && canSubmit && !picking && !voice.active,
+                        onStop = onStop, onSend = ::send)
+                }
             }
 
             AnimatedVisibility(
@@ -710,39 +704,43 @@ fun ChatComposer(
                 }
             }
 
-            Row(
+            if (expanded) Row(
                     Modifier.fillMaxWidth().padding(start = 6.dp, end = 6.dp, bottom = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Box {
-                        IconButton(onClick = { menu = true }, enabled = canSubmit && !picking && !voice.active, modifier = Modifier.size(36.dp)) {
-                            Icon(Icons.Outlined.Add, contentDescription = "Attach")
-                        }
-                        DropdownMenu(menu, onDismissRequest = { menu = false }) {
-                            DropdownMenuItem(text = { Text("Photos") }, onClick = {
-                                menu = false
-                                photos.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                            })
-                            DropdownMenuItem(text = { Text("Files") }, onClick = {
-                                menu = false
-                                files.launch("*/*")
-                            })
-                        }
+                    IconButton(onClick = { photos.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                        enabled = canSubmit && !picking && !voice.active, modifier = Modifier.size(40.dp)) {
+                        Icon(Icons.Outlined.Photo, "Photos")
                     }
-                    Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
-                    if (onChooseAgent != null || agentLabel != null) {
-                        AgentChip(agent, enabled = agentEnabled,
-                            onClick = onChooseAgent ?: { showAgentUsage = true },
-                            labelOverride = agentLabel)
+                    IconButton(onClick = { files.launch("*/*") }, enabled = canSubmit && !picking && !voice.active,
+                        modifier = Modifier.size(40.dp)) { Icon(Icons.Outlined.AttachFile, "Files") }
+                    IconButton(onClick = {
+                        try {
+                            val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                            val clip = clipboard.primaryClip
+                            val uris = mutableListOf<Uri>()
+                            val pasted = StringBuilder()
+                            if (clip != null) for (index in 0 until clip.itemCount) {
+                                val item = clip.getItemAt(index)
+                                val uri = item.uri
+                                if (uri != null) {
+                                    require(uri.scheme == "content") { "Choose this file from Files instead." }
+                                    uris += uri
+                                } else item.text?.let { pasted.append(it) }
+                            }
+                            if (pasted.isNotEmpty()) updateText(text + pasted)
+                            if (uris.isNotEmpty()) loadSelection(uris, false, clip)
+                        } catch (_: Exception) { pickerError = "Could not paste this item. Try choosing it from Files." }
+                    }, enabled = canSubmit && !picking && !voice.active, modifier = Modifier.size(40.dp)) {
+                        Icon(Icons.Outlined.ContentPaste, "Paste")
                     }
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    if (isStreaming && hasText && canSubmit && !voice.active) {
-                        IconButton(onClick = ::send, modifier = Modifier.size(36.dp)) {
-                            Icon(Icons.Outlined.PlaylistAdd, contentDescription = "Queue message")
-                        }
-                    }
+                    Spacer(Modifier.weight(1f))
                     VoiceMic(enabled = canSubmit && effectiveDraftingEnabled && !picking && !voice.active, onClick = ::startVoice)
+                    if (isStreaming && onStop != null && hasPayload) {
+                        IconButton(onClick = ::send, enabled = canSubmit && !picking && !voice.active, modifier = Modifier.size(36.dp)) {
+                            Icon(Icons.Outlined.PlaylistAdd, "Queue message")
+                        }
+                    }
                     TrailingButton(
                         isStreaming = isStreaming,
                         hasPayload = hasPayload && canSubmit && !picking && !voice.active,
