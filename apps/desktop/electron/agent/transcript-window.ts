@@ -1,19 +1,17 @@
-// Suffix-window protocol for transcript-carrying requests (POST /agent/chat,
-// PUT /agent/conversations/:id/transcript).
+// Suffix-window protocol for POST /agent/chat and PUT .../transcript.
 //
 // The backend persists every finalized turn and accepts `baseIndex` + a tail,
-// hydrating the stored prefix by count. So only the tail that can still be
-// unsettled client-side is sent: from the user messages since the last
-// assistant reply onward. That always contains the current turn (in-flight
-// assistant message, client-tool results, permission decisions) and any
-// earlier user message that never got a reply (a send that failed before the
-// backend stored it), while everything before it was finalized or synced.
+// hydrating the stored prefix by count, so only the still-unsettled tail is
+// sent: from the latest user message onward (the current turn's in-flight
+// assistant message, client-tool results, permission decisions). /chat accepts
+// exactly one new user message, as the final one, so the tail carries exactly
+// one — an earlier user message whose send failed before the backend stored it
+// is NOT resent, or /chat would reject two unstored user messages
+// (invalid_message_batch). That failed send leaves the client's baseIndex
+// ahead of the store; the 409 transcript_out_of_sync -> rebase path realigns it.
 //
-// The preload windows before ipcRenderer.invoke, so the whole tab transcript
-// never crosses IPC into the main process: copying it into the main heap on
-// every turn is what ran the main process out of memory. If the server
-// disagrees (409 transcript_out_of_sync), callers rebase the same tail onto
-// the stored count the rejection carries.
+// The preload windows before ipcRenderer.invoke, so the whole transcript never
+// crosses into the main heap every turn (that ran the main process out of memory).
 
 export type TranscriptWindow<M> = {
   messages: M[]
@@ -36,7 +34,6 @@ export function windowTranscript<M extends RoleCarrier>(
       break
     }
   }
-  while (lastUser > 0 && messages[lastUser - 1]?.role === 'user') lastUser--
   if (lastUser <= 0) return { messages, baseIndex: base > 0 ? base : undefined }
 
   return {
