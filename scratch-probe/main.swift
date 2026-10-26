@@ -3,6 +3,7 @@ import Foundation
 
 // Connects to the Mac's own Screen Sharing and reports what it negotiates and
 // how large and slow each framebuffer update is. Credentials come from the environment.
+setvbuf(stdout, nil, _IOLBF, 0)
 let env = ProcessInfo.processInfo.environment
 let fd = socket(AF_INET, SOCK_STREAM, 0)
 var addr = sockaddr_in()
