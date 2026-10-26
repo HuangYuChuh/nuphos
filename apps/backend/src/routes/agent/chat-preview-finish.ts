@@ -4,6 +4,20 @@
 // memory ingest chain.
 import { randomUUID } from 'node:crypto'
 
+import { getConversationMessagesHead, syncConversationTranscript } from '@/lib/agent/db'
+import { mergePreviewMemoryActivity } from '@/lib/agent/memory-slots/preview-activity-store'
+import { listPlansCreatedForConversation } from '@/lib/agent/plans'
+import { partsWithoutFailureNotice } from '@/lib/claude-code-preview/codex-turn-failure'
+import { completedTurnOutput } from '@/lib/claude-code-preview/empty-turn'
+import { ingestPreviewTurn } from '@/lib/claude-code-preview/preview-recall'
+import {
+  classifyPreviewInterruption,
+  ensurePreviewTitle,
+  interruptToolSteps,
+  previewAssistantMessageParts,
+  turnInterruptedPart,
+} from '@/lib/claude-code-preview/preview-transcript'
+
 import { transcriptTailFrame } from './errors'
 import { traceAgentChatError } from './trace'
 import { getFirstTranscriptMessage, uiMessagesToTranscript } from './transcript'
@@ -13,19 +27,6 @@ import type { PreviewTurnMemory } from '@/lib/claude-code-preview/preview-recall
 import type { PreviewToolStep } from '@/lib/claude-code-preview/preview-transcript'
 import type { TurnDiagnostics } from '@/lib/claude-code-preview/turn-diagnostics'
 import type { UIMessage } from 'ai'
-
-import { getConversationMessagesHead, syncConversationTranscript } from '@/lib/agent/db'
-import { mergePreviewMemoryActivity } from '@/lib/agent/memory-slots/preview-activity-store'
-import { listPlansCreatedForConversation } from '@/lib/agent/plans'
-import { partsWithoutFailureNotice } from '@/lib/claude-code-preview/codex-turn-failure'
-import { ingestPreviewTurn } from '@/lib/claude-code-preview/preview-recall'
-import {
-  classifyPreviewInterruption,
-  ensurePreviewTitle,
-  interruptToolSteps,
-  previewAssistantMessageParts,
-  turnInterruptedPart,
-} from '@/lib/claude-code-preview/preview-transcript'
 
 function insertBeforeFinalText(
   parts: UIMessage['parts'],
@@ -104,11 +105,16 @@ export async function finishPreviewTurn(args: {
   // stream event to place them precisely. Preserve their previous position
   // immediately before the final answer instead of moving the answer's
   // interleaved commentary and tools around them.
-  const parts = insertBeforeFinalText(orderedParts, nativePlanParts)
+  const { parts, steered, answer } = completedTurnOutput(
+    insertBeforeFinalText(orderedParts, nativePlanParts),
+    args.steered,
+  )
 
   const tail = [
-    ...args.steered,
-    ...(parts.length > 0 ? [{ id: randomUUID(), role: 'assistant' as const, parts }] : []),
+    ...steered,
+    // Preserve the completion boundary even when there is no visible output:
+    // thread-delivery replay deduplicates messages before the last assistant.
+    { id: randomUUID(), role: 'assistant' as const, parts },
   ]
   const transcriptMessages = uiMessagesToTranscript([...args.messages, ...tail])
 
@@ -142,7 +148,7 @@ export async function finishPreviewTurn(args: {
     userId,
     teamId,
     firstMessage: args.firstMessage,
-    assistantResponse: args.answer,
+    assistantResponse: answer,
     locale: args.locale,
   })
   if (args.memory) {
@@ -161,7 +167,7 @@ export async function finishPreviewTurn(args: {
       teamId,
       requestId: args.requestId,
       memory: args.memory,
-      answer: args.answer,
+      answer,
       toolSteps,
       startedAt: args.startedAt,
       emitFrame: args.emit,
