@@ -100,7 +100,7 @@ struct DesktopTests {
             cursor: { recorder.cursor = $0 },
             pointer: { recorder.pointer = ($0, $1) },
             clipboard: { _ in },
-            update: { bytes, _, consumed in recorder.updates.append((bytes, consumed)) }
+            update: { bytes, _, _, consumed in recorder.updates.append((bytes, consumed)) }
         ))
         var server = Array("RFB 003.008\n".utf8) + [1, 1] + be32(0)
         server += be16(80) + be16(4) + [UInt8](repeating: 0, count: 16) + be32(3) + Array("Box".utf8)
