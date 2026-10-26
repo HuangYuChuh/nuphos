@@ -61,7 +61,8 @@ export async function login(): Promise<UserInfo> {
 export async function requestEmailCode(email: string): Promise<void> {
   const res = await fetch(`${apiUrl()}/auth/email/request-code`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    // The code email names the app that asked for it.
+    headers: { 'content-type': 'application/json', [CLIENT_VERSION_HEADER]: CLIENT_VERSION_VALUE },
     body: JSON.stringify({ email }),
     signal: AbortSignal.timeout(20_000),
   })
