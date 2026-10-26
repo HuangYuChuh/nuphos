@@ -41,6 +41,12 @@ class FakeCollection {
 
     return { insertedId: doc._id }
   }
+  // Only the sign-in alert's look at other sessions lists; none exist here.
+  find() {
+    const cursor = { limit: () => cursor, toArray: async () => [] }
+
+    return cursor
+  }
   async findOne(filter: Doc) {
     return this.docs.find((d) => matches(d, filter)) ?? null
   }
@@ -99,6 +105,7 @@ let googleSignIn: (code: string, redirectUri: string) => Promise<typeof USER> = 
   _redirectUri,
 ) => USER
 const sessionsStarted: string[] = []
+const sessionSources: { ip?: string }[] = []
 
 useDb({ db: (() => ({ collection })) as unknown as typeof dbActual.db })
 useIdentity({
@@ -108,8 +115,9 @@ useIdentity({
     id === USER.id ? USER : null) as unknown as typeof identityActual.getNuphosUserById,
 })
 useIdentitySessions({
-  createUserSession: async (userId: string) => {
+  createUserSession: async (userId: string, source?: { ip?: string }) => {
     sessionsStarted.push(userId)
+    sessionSources.push(source ?? {})
 
     return `minted-for-${userId}`
   },
@@ -174,6 +182,7 @@ beforeEach(() => {
   })
   googleSignIn = async () => USER
   sessionsStarted.length = 0
+  sessionSources.length = 0
 })
 
 describe('the native handoff', () => {
@@ -566,4 +575,15 @@ describe('the legacy path still works', () => {
     expect(res.status).toBe(403)
     expect(body.errors[0]?.extensions.code).toBe('account_disabled')
   })
+})
+
+test('a sign-in the website makes for a browser does not take the website’s address', async () => {
+  const res = await app().request('/auth/google/sign-in', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'CF-Connecting-IP': '198.51.100.7' },
+    body: JSON.stringify({ code: 'google-code', redirectUri: NUPHOS_CALLBACK }),
+  })
+
+  expect(res.status).toBe(200)
+  expect(sessionSources[0]?.ip).toBeUndefined()
 })

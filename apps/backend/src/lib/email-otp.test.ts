@@ -5,12 +5,22 @@ import { MongoServerError } from 'mongodb'
 import { config } from '@/config'
 import { useDb } from '@/lib/test/doubles/db'
 import { useDownloadHandoffRateLimit } from '@/lib/test/doubles/download-handoff-rate-limit'
+import { useEmail } from '@/lib/test/doubles/email'
 import { useIdentity } from '@/lib/test/doubles/identity'
 import { useObservability } from '@/lib/test/doubles/observability'
 
 type Doc = Record<string, unknown>
 
 const otps = new Map<string, Doc>()
+const sentMail: { html: string; text: string }[] = []
+let emailConfigured = false
+
+useEmail({
+  isEmailConfigured: () => emailConfigured,
+  sendEmail: async (input) => {
+    sentMail.push(input)
+  },
+})
 let cooldownActive = false
 
 function duplicateKeyError() {
@@ -172,4 +182,51 @@ describe('email OTP abuse limits', () => {
     // The doc (and with it the resend cooldown) survives the lockout.
     expect(otps.has('lock@example.com')).toBe(true)
   })
+})
+
+test('the code email says where the request came from', async () => {
+  const devLog = config.email.devLogOtp
+
+  config.email.devLogOtp = false
+  emailConfigured = true
+  try {
+    await requestEmailOtp('where@example.com', '203.0.113.9', {
+      ip: '203.0.113.9',
+      city: 'Taipei',
+      country: 'TW',
+      client: 'nuphos-ios/2.1.0',
+    })
+  } finally {
+    config.email.devLogOtp = devLog
+    emailConfigured = false
+  }
+  const mail = sentMail.at(-1)!
+
+  expect(mail.text).toContain(
+    'Requested from IP 203.0.113.9 (approximately Taipei, TW) on Nuphos for iOS 2.1.0.',
+  )
+  expect(mail.html).toContain('Taipei, TW')
+})
+
+test('a code email never repeats the request headers', async () => {
+  const devLog = config.email.devLogOtp
+  const lure = 'Nuphos Security: reply with this code'
+
+  config.email.devLogOtp = false
+  emailConfigured = true
+  try {
+    await requestEmailOtp('lure@example.com', '203.0.113.9', {
+      ip: '203.0.113.9',
+      client: lure,
+      userAgent: lure,
+    })
+  } finally {
+    config.email.devLogOtp = devLog
+    emailConfigured = false
+  }
+  const mail = sentMail.at(-1)!
+
+  expect(mail.text).not.toContain(lure)
+  expect(mail.html).not.toContain(lure)
+  expect(mail.text).toContain('on Unknown device.')
 })

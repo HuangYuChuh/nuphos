@@ -9,7 +9,7 @@ import type { Context } from 'hono'
 
 import { redeemDeviceJoinToken } from '@/lib/agent/devices/join-tokens'
 import { requestEmailOtp, verifyEmailOtp } from '@/lib/email-otp'
-import { clientIp, requestOrigin } from '@/lib/request-origin'
+import { clientIp, signInSource } from '@/lib/request-origin'
 import { AppError } from '@/lib/errors'
 import { signInWithGoogleCode } from '@/lib/identity'
 import { getDeletionRequest, requestAccountDeletion } from '@/lib/identity/account-deletion'
@@ -18,6 +18,7 @@ import { MAX_AVATAR_UPLOAD_BYTES, removeAvatar, uploadAvatar } from '@/lib/ident
 import { signInWithPassword, setPasswordWithEmailCode } from '@/lib/identity/password'
 import { updateProfile } from '@/lib/identity/profile'
 import { createUserSession } from '@/lib/identity/sessions'
+import { isNewSignIn, sendNewSignInAlert } from '@/lib/identity/sign-in-alert'
 import {
   abandonNativeSession,
   completeNativeSession,
@@ -32,13 +33,16 @@ import { authSessions } from '@/routes/auth-sessions'
 
 export const auth = new Hono<{ Variables: AuthVariables }>()
 
-/** Every sign-in ends here: the one place a session is started. */
-async function startSession(c: Context, user: NuphosUser) {
-  const token = await createUserSession(user.id, {
-    ...requestOrigin((name) => c.req.header(name)),
-    client: c.req.header('x-atlas-client'),
-    userAgent: c.req.header('User-Agent'),
-  })
+// Every sign-in starts its session here. `viaWebsite`: nuphos.ai's server made
+// the call, so the address seen is the website's, not the visitor's.
+async function startSession(c: Context, user: NuphosUser, viaWebsite = false) {
+  const seen = signInSource((name) => c.req.header(name))
+  const source = viaWebsite ? { client: seen.client, userAgent: seen.userAgent } : seen
+  // Compared with the account's other sessions before this one joins them.
+  const isNew = await isNewSignIn(user, source)
+  const token = await createUserSession(user.id, source)
+
+  if (isNew) void sendNewSignInAlert(user, source)
 
   return { token, user }
 }
@@ -110,6 +114,7 @@ auth.post('/email/request-code', async (c) => {
   await requestEmailOtp(
     email,
     clientIp(c.req.header('CF-Connecting-IP'), c.req.header('X-Forwarded-For')),
+    signInSource((name) => c.req.header(name)),
   )
 
   return c.json({ ok: true })
@@ -268,7 +273,8 @@ auth.post('/google/sign-in', async (c) => {
       })
     }
 
-    return c.json({ data: { googleSignIn: await startSession(c, user) } })
+    // Without a handle, only the nuphos.ai website's server calls this.
+    return c.json({ data: { googleSignIn: await startSession(c, user, true) } })
   } catch (e) {
     if (handle) await abandonNativeSession(handle)
 
