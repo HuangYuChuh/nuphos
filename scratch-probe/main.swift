@@ -38,7 +38,7 @@ let client = RFBClient(send: send, handlers: .init(
         let n = counter.updates
         counter.lock.unlock()
         if true { print(stamp(), "update #\(n): \(bytes) bytes, encodings \(RFBProbe.take())") }
-        if n == 1 || n % 5 == 0 {
+        if n <= 3 || n % 10 == 0 {
             var out = Array("P6\n\(fb.width) \(fb.height)\n255\n".utf8)
             for p in fb.pixels { out += [UInt8(p >> 16 & 255), UInt8(p >> 8 & 255), UInt8(p & 255)] }
             FileManager.default.createFile(atPath: "frame-\(env["PROBE_TAG"] ?? "x")-\(n).ppm", contents: Data(out))
