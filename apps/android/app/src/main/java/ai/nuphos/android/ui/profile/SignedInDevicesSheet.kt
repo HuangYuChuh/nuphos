@@ -194,11 +194,19 @@ private fun DeviceRow(session: SignInSession, now: Instant, enabled: Boolean, on
                     }
                 }
             }
+            // Keep location and activity separate so long places cannot hide activity.
             Text(
-                listOfNotNull(SignInSessions.place(session), SignInSessions.activity(session, now)).joinToString(" · "),
+                SignInSessions.place(session),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                SignInSessions.activity(session, now) ?: "Last active: unknown",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         }
