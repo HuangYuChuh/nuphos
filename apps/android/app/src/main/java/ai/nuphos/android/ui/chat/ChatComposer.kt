@@ -708,7 +708,7 @@ fun ChatComposer(
                     Modifier.fillMaxWidth().padding(start = 6.dp, end = 6.dp, bottom = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    IconButton(onClick = { photos.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                    IconButton(onClick = { photos.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
                         enabled = canSubmit && !picking && !voice.active, modifier = Modifier.size(40.dp)) {
                         Icon(Icons.Outlined.Photo, "Photos")
                     }
@@ -868,7 +868,7 @@ private fun TrailingButton(
                 disabledContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
             ),
         ) {
-            Icon(Icons.Rounded.ArrowUpward, contentDescription = "Send", modifier = Modifier.size(18.dp))
+            Icon(Icons.Rounded.ArrowUpward, contentDescription = if (isStreaming) "Queue message" else "Send", modifier = Modifier.size(18.dp))
         }
     }
 }
@@ -959,7 +959,7 @@ internal fun selectionInput(context: android.content.Context, uri: Uri, images: 
         }
     }
     val mime = context.contentResolver.getType(uri) ?: "application/octet-stream"
-    return AttachmentRetention.Input(name, mime, size, images || mime.startsWith("image/")) {
+    return AttachmentRetention.Input(name, mime, size, (images && !mime.startsWith("video/")) || mime.startsWith("image/")) {
         requireNotNull(context.contentResolver.openInputStream(uri)) { "Could not open the selected file." }
     }
 }
