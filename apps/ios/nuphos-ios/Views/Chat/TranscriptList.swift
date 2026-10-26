@@ -198,6 +198,7 @@ final class TranscriptController: UIViewController, UICollectionViewDelegate, Ch
             view.keyboardLayoutGuide.keyboardDismissPadding = height
         }
         let frame = view.convert(collection.frame, to: nil)
+        if dbg { UIEventLog.regression(name: "dbg_layout", passed: true, detail: "frame=\(frame) prev=\(previousFrame) offset=\(collection.contentOffset.y)") }
         guard frame.width > 0, frame.height > 0, frame.size != previousFrame.size else { return }
         let old = previousFrame
         previousFrame = frame
@@ -307,7 +308,11 @@ final class TranscriptController: UIViewController, UICollectionViewDelegate, Ch
         layout.keepContentOffsetAtBottomOnBatchUpdates = false
     }
 
+    var dbg = false
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        if dbg {
+            UIEventLog.regression(name: "dbg_scroll", passed: true, detail: "offset=\(scrollView.contentOffset.y) h=\(scrollView.bounds.height) insetTop=\(scrollView.adjustedContentInset.top) stack=\(Thread.callStackSymbols.prefix(12).map { $0.split(separator: " ", omittingEmptySubsequences: true).dropFirst(3).prefix(1).joined() }.joined(separator: " < "))")
+        }
         UIEventLog.chatScroll(sessionId: sessionID, contentOffset: scrollView.contentOffset)
         updateLatestButton()
     }
@@ -595,9 +600,11 @@ final class TranscriptController: UIViewController, UICollectionViewDelegate, Ch
                 return cell.convert(cell.bounds, to: nil).minY
             }
             let before = rowY()
+            dbg = true
             navigation.setNavigationBarHidden(true, animated: false)
             await pause()
             let away = distanceToEnd, after = rowY()
+            dbg = false
             navigation.setNavigationBarHidden(false, animated: false)
             await pause()
             check("header_hides_mid_drag", abs(away - 20) < 1 && abs(after - before) < 1,
