@@ -587,6 +587,8 @@ final class TranscriptController: UIViewController, UICollectionViewDelegate, Ch
         showLatest()
         await pause()
         if let navigation = navigationController {
+            // A finger goes down and moves up 20 pt; it has not lifted yet.
+            scrollViewWillBeginDragging(collection)
             collection.contentOffset.y -= 20
             func rowY() -> CGFloat {
                 guard let path = collection.indexPathsForVisibleItems.max(), let cell = collection.cellForItem(at: path) else { return .nan }
