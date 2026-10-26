@@ -67,8 +67,10 @@ nonisolated final class RFBClient {
         /// Where the server's pointer went when something else moved it.
         var pointer: @Sendable (_ x: Int, _ y: Int) -> Void
         var clipboard: @Sendable (String) -> Void
-        /// After each update: its bytes, the seconds since it was asked for, and all bytes read so far.
-        var update: (@Sendable (_ bytes: Int, _ seconds: Double, _ consumed: Int) -> Void)? = nil
+        /// After each update: its bytes, the seconds from asking for it to its
+        /// first byte (an unchanged screen waits here), the seconds from its
+        /// first byte to the last one decoded, and all bytes read so far.
+        var update: (@Sendable (_ bytes: Int, _ waited: Double, _ took: Double, _ consumed: Int) -> Void)? = nil
     }
 
     /// The largest screen and pointer shape accepted, and the longest text or
@@ -98,8 +100,9 @@ nonisolated final class RFBClient {
         while true {
             switch try await input.u8() {
             case 0:
+                let arrived = Date()
                 try await update(input)
-                handlers.update?(input.consumed - consumedBefore, Date().timeIntervalSince(requested), input.consumed)
+                handlers.update?(input.consumed - consumedBefore, arrived.timeIntervalSince(requested), Date().timeIntervalSince(arrived), input.consumed)
                 consumedBefore = input.consumed
                 requested = Date()
                 send(Self.updateRequest(incremental: true, width: framebuffer.width, height: framebuffer.height))

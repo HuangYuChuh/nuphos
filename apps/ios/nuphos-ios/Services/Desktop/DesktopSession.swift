@@ -161,7 +161,7 @@ final class DesktopSession {
         let key = sessionId
         let mailbox = frames
         // The handlers hold the session until the connection ends, which stop() makes happen.
-        let handlers = RFBClient.Handlers(
+        var handlers = RFBClient.Handlers(
             credentials: { try await self.account(for: key, failed: signInFailed) },
             ready: { width, height in
                 Task { @MainActor in self.began(width: width, height: height) }
@@ -176,15 +176,21 @@ final class DesktopSession {
             pointer: { x, y in
                 Task { @MainActor in self.serverMoved(to: CGPoint(x: x, y: y)) }
             },
-            clipboard: { _ in },
-            update: { bytes, seconds, consumed in
-                let line = String(format: "%.0f KB in %.2f s · %.0f KB unread", Double(bytes) / 1024, seconds, Double(received.value - consumed) / 1024)
-                Task { @MainActor in self.stats = line }
-            }
+            clipboard: { _ in }
         )
+        #if DEBUG
+        handlers.update = { bytes, waited, took, consumed in
+            let line = String(
+                format: "%.0f KB · waited %.2f s · took %.2f s · %.0f KB unread",
+                Double(bytes) / 1024, waited, took, Double(received.value - consumed) / 1024
+            )
+            Task { @MainActor in self.stats = line }
+        }
+        #endif
+        let connection = handlers
         try await withTaskCancellationHandler {
             try await Task.detached {
-                let client = RFBClient(send: { Self.transmit($0, on: socket) }, handlers: handlers)
+                let client = RFBClient(send: { Self.transmit($0, on: socket) }, handlers: connection)
                 try await client.run(RFBByteStream(chunks))
             }.value
         } onCancel: {
