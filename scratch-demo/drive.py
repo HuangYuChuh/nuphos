@@ -27,7 +27,7 @@ def find(label, timeout=240):
 
 def tap(label):
     x, y, _ = find(label)
-    subprocess.run([idb, "ui", "tap", "--udid", udid, str(x), str(y)], check=True)
+    subprocess.run([idb, "ui", "tap", "--udid", udid, str(round(x)), str(round(y))], check=True)
     log(f"tap {label}")
 
 def shot(name):
@@ -43,7 +43,7 @@ time.sleep(2)
 _, _, pad = find("Drag to move the pointer")
 cx, cy = pad["x"] + pad["width"] / 2, pad["y"] + pad["height"] / 2
 for dx, dy in [(-90, -40), (120, 20), (-40, 30)]:
-    subprocess.run([idb, "ui", "swipe", "--udid", udid, str(cx), str(cy), str(cx + dx), str(cy + dy), "--duration", "0.6"], check=True)
+    subprocess.run([idb, "ui", "swipe", "--udid", udid, str(round(cx)), str(round(cy)), str(round(cx + dx)), str(round(cy + dy)), "--duration", "0.6"], check=True)
     time.sleep(0.6)
 log("trackpad moved the pointer")
 tap("Show keyboard")
