@@ -5,6 +5,8 @@ cd "$(dirname "$0")"
 pass=$(openssl rand -hex 12)
 sudo sysadminctl -addUser probe -fullName Probe -password "$pass" -admin 2>&1 | tail -1
 PROBE_ACCOUNT=probe
+if sudo sysadminctl -resetPasswordFor "$USER" -newPassword "$pass" -adminUser probe -adminPassword "$pass" 2>&1 | tail -1; then PROBE_ACCOUNT=$USER; fi
+echo "probing as $PROBE_ACCOUNT"
 sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
   -activate -configure -access -on -privs -all -allowAccessFor -allUsers -restart -agent -menu >/dev/null 2>&1 || true
 for i in $(seq 1 30); do nc -z 127.0.0.1 5900 && break; sleep 1; done
@@ -18,7 +20,7 @@ swiftc -O flipper/main.swift -o flipper-bin
 ./flipper-bin > flips.log 2>&1 &
 for round in 1 2 3; do
   echo "== our encodings (ZRLE, CopyRect, Raw + pseudo), round $round"
-  PROBE_USER=$PROBE_ACCOUNT PROBE_PASS=$pass PROBE_SECONDS=20 ./probe
+  PROBE_TAG=r$round PROBE_USER=$PROBE_ACCOUNT PROBE_PASS=$pass PROBE_SECONDS=20 ./probe
 done
 PROBE_PASS_SAVED=$pass PROBE_ACCOUNT=$PROBE_ACCOUNT python3 - <<'PY'
 import os, subprocess
@@ -32,3 +34,4 @@ for name, encs in [("noVNC order", "7,-260,16,21,5,2,6,1,0,-26,-254,-223,-224,-3
 PY
 
 echo "== flips"; cat flips.log | head -40
+mkdir -p ../out && for f in frame-*.ppm; do sips -s format png "$f" --out "../out/${f%.ppm}.png" >/dev/null 2>&1; done; ls ../out

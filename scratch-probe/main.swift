@@ -30,7 +30,7 @@ func stamp() -> String { String(format: "%7.2fs @%.3f", Date().timeIntervalSince
 let client = RFBClient(send: send, handlers: .init(
     credentials: { print(stamp(), "credentials asked (ARD)"); return (env["PROBE_USER"]!, env["PROBE_PASS"]!) },
     ready: { w, h in print(stamp(), "ready \(w)x\(h)") },
-    frame: { _ in
+    frame: { fb in
         counter.lock.lock()
         let bytes = counter.received - counter.lastReport
         counter.lastReport = counter.received
@@ -38,6 +38,11 @@ let client = RFBClient(send: send, handlers: .init(
         let n = counter.updates
         counter.lock.unlock()
         if true { print(stamp(), "update #\(n): \(bytes) bytes, encodings \(RFBProbe.take())") }
+        if n == 1 || n % 5 == 0 {
+            var out = Array("P6\n\(fb.width) \(fb.height)\n255\n".utf8)
+            for p in fb.pixels { out += [UInt8(p >> 16 & 255), UInt8(p >> 8 & 255), UInt8(p & 255)] }
+            FileManager.default.createFile(atPath: "frame-\(env["PROBE_TAG"] ?? "x")-\(n).ppm", contents: Data(out))
+        }
     },
     cursor: { c in print(stamp(), "cursor \(c.width)x\(c.height)") },
     pointer: { _, _ in },
