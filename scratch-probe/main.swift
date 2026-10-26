@@ -25,7 +25,7 @@ Thread.detachNewThread {
     }
 }
 func send(_ bytes: [UInt8]) { _ = bytes.withUnsafeBufferPointer { write(fd, $0.baseAddress, $0.count) } }
-func stamp() -> String { String(format: "%7.2fs", Date().timeIntervalSince(counter.start)) }
+func stamp() -> String { String(format: "%7.2fs @%.3f", Date().timeIntervalSince(counter.start), Date().timeIntervalSince1970) }
 
 let client = RFBClient(send: send, handlers: .init(
     credentials: { print(stamp(), "credentials asked (ARD)"); return (env["PROBE_USER"]!, env["PROBE_PASS"]!) },
@@ -37,7 +37,7 @@ let client = RFBClient(send: send, handlers: .init(
         counter.updates += 1
         let n = counter.updates
         counter.lock.unlock()
-        if n <= 5 || n % 20 == 0 || bytes > 1_000_000 { print(stamp(), "update #\(n): \(bytes) bytes, encodings \(RFBProbe.take())") }
+        if true { print(stamp(), "update #\(n): \(bytes) bytes, encodings \(RFBProbe.take())") }
     },
     cursor: { c in print(stamp(), "cursor \(c.width)x\(c.height)") },
     pointer: { _, _ in },

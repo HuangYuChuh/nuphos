@@ -12,9 +12,10 @@ nc -z 127.0.0.1 5900 && echo "screen sharing listening" || { echo "screen sharin
 D=../apps/ios/nuphos-ios/Services/Desktop
 python3 patch.py $D/RFBClient.swift RFBClient.swift
 swiftc -O $D/ZlibStream.swift $D/RFBFramebuffer.swift RFBClient.swift $D/RFBKeysym.swift $D/AppleRemoteDesktopAuth.swift main.swift -o probe || exit 1
-swiftc -O $D/ZlibStream.swift zlibcheck.swift -o zlibcheck && ./zlibcheck
+swiftc -O $D/ZlibStream.swift zlibcheck/main.swift -o zlibcheck-bin && ./zlibcheck-bin
+swiftc -O flipper/main.swift -o flipper-bin
 # Something changes on screen while it runs.
-( sleep 15; open -a Calculator; sleep 5; open -a "System Settings"; sleep 5; open -a TextEdit; sleep 5; osascript -e 'tell application "Finder" to activate' ) &
+./flipper-bin > flips.log 2>&1 &
 for round in 1 2 3; do
   echo "== our encodings (ZRLE, CopyRect, Raw + pseudo), round $round"
   PROBE_USER=$PROBE_ACCOUNT PROBE_PASS=$pass PROBE_SECONDS=20 ./probe
@@ -29,3 +30,5 @@ for name, encs in [("noVNC order", "7,-260,16,21,5,2,6,1,0,-26,-254,-223,-224,-3
     subprocess.run(["swiftc", "-O", f"{D}/ZlibStream.swift", f"{D}/RFBFramebuffer.swift", "RFBClient.swift", f"{D}/RFBKeysym.swift", f"{D}/AppleRemoteDesktopAuth.swift", "main.swift", "-o", "probe2"], check=True)
     subprocess.run(["./probe2"], env={**os.environ, "PROBE_USER": os.environ["PROBE_ACCOUNT"], "PROBE_PASS": os.environ["PROBE_PASS_SAVED"], "PROBE_SECONDS": "20"})
 PY
+
+echo "== flips"; cat flips.log | head -40
