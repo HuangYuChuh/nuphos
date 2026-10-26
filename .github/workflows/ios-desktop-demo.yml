@@ -36,6 +36,8 @@ jobs:
           xcrun simctl boot "$udid"
           xcrun simctl bootstatus "$udid" -b
           xcrun simctl ui "$udid" appearance light
+          xcrun simctl spawn "$udid" defaults write com.apple.keyboard.preferences DidShowContinuousPathIntroduction -bool true
+          xcrun simctl spawn "$udid" defaults write com.apple.Preferences DidShowContinuousPathIntroduction -bool true
           app=$(find "$RUNNER_TEMP/dd/Build/Products" -name 'nuphos-ios.app' -path '*iphonesimulator*' | head -1)
           xcrun simctl install "$udid" "$app"
           bundle=$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$app/Info.plist")
@@ -56,6 +58,7 @@ jobs:
           path: out/
 
   probe:
+    if: false
     runs-on: xcode-27
     timeout-minutes: 20
     env:
