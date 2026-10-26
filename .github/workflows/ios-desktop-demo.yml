@@ -1,0 +1,55 @@
+# Scratch only: records the iOS Desktop screen against a fixture desktop for PR #868.
+name: iOS desktop demo
+on:
+  push:
+    branches: [scratch/ios-desktop-demo]
+permissions:
+  contents: read
+jobs:
+  demo:
+    runs-on: xcode-27
+    timeout-minutes: 45
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build for iOS Simulator
+        working-directory: apps/ios
+        run: |
+          xcodebuild -project nuphos-ios.xcodeproj -scheme nuphos-ios -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/dd" \
+            CODE_SIGNING_ALLOWED=NO build -quiet
+      - name: Install idb
+        run: |
+          brew tap facebook/fb >/dev/null
+          brew install idb-companion >/dev/null
+          python3 -m venv "$RUNNER_TEMP/idb"
+          "$RUNNER_TEMP/idb/bin/pip" install -q fb-idb
+      - name: Record
+        run: |
+          mkdir -p out && cd out
+          type=$(xcrun simctl list devicetypes -j | python3 -c "import json,sys; t=[d['identifier'] for d in json.load(sys.stdin)['devicetypes'] if d['name'].startswith('iPhone') and 'Pro' in d['name'] and 'Max' not in d['name']]; print(t[-1])")
+          udid=$(xcrun simctl create demo "$type")
+          xcrun simctl boot "$udid"
+          xcrun simctl bootstatus "$udid" -b
+          xcrun simctl ui "$udid" appearance light
+          app=$(find "$RUNNER_TEMP/dd/Build/Products" -name 'nuphos-ios.app' -path '*iphonesimulator*' | head -1)
+          xcrun simctl install "$udid" "$app"
+          bundle=$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$app/Info.plist")
+          python3 ../scratch-demo/desktop-fixture.py 8765 > fixture.log 2>&1 &
+          xcrun simctl io "$udid" recordVideo --codec h264 --force demo.mp4 & rec=$!
+          sleep 3
+          xcrun simctl launch "$udid" "$bundle" -preview-desktop -apiBaseURL http://127.0.0.1:8765
+          status=0
+          PATH="$RUNNER_TEMP/idb/bin:$PATH" python3 ../scratch-demo/drive.py "$udid" "$RUNNER_TEMP/idb/bin/idb" > drive.log 2>&1 || status=$?
+          kill -INT "$rec"; wait "$rec" || true
+          xcrun simctl io "$udid" screenshot final.png || true
+          cat drive.log fixture.log
+          exit $status
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        if: always()
+        with:
+          name: ios-desktop-demo
+          path: out/
