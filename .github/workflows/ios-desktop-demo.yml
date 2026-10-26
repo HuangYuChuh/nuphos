@@ -54,3 +54,15 @@ jobs:
         with:
           name: ios-desktop-demo
           path: out/
+
+  probe:
+    runs-on: xcode-27
+    timeout-minutes: 20
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Probe macOS Screen Sharing
+        run: sw_vers; bash scratch-probe/run.sh
