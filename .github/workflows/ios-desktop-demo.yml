@@ -24,6 +24,7 @@ jobs:
       - name: Install idb
         run: |
           brew tap facebook/fb >/dev/null
+          brew trust facebook/fb
           brew install idb-companion >/dev/null
           python3 -m venv "$RUNNER_TEMP/idb"
           "$RUNNER_TEMP/idb/bin/pip" install -q fb-idb
