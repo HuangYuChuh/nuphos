@@ -481,6 +481,7 @@ internal fun PageSwitcher(
     Box(modifier) {
         TextButton(
             onClick = { expanded = true },
+            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
             modifier = Modifier.heightIn(min = 48.dp).focusRequester(anchorFocus).testTag("home-page-switcher")
                 .semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" },
         ) {

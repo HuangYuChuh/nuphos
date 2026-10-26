@@ -2,7 +2,7 @@ package ai.nuphos.android.ui.agent
 
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.clickable
@@ -63,6 +63,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -305,7 +306,8 @@ private fun RefreshableHistoryState(content: @Composable () -> Unit) {
 internal fun ConversationTreeRow(row: ConversationNesting.Row, pinned: Boolean, status: String?, onToggle: () -> Unit, onClick: () -> Unit, onUnlink: (() -> Unit)? = null, unlinking: Boolean = false, onWatch: (() -> Unit)? = null, watchBusy: Boolean = false, selected: Boolean = false, interactions: ConversationRowInteractions = remember { ConversationRowInteractions() }, onPin: (() -> Unit)? = null, pinEnabled: Boolean = true, onArchive: (() -> Unit)? = null, actionBusy: Boolean = false) {
     val depth = row.depth.coerceAtMost(4)
     val line = MaterialTheme.colorScheme.outlineVariant
-    Box(Modifier.fillMaxWidth().drawBehind {
+    Box(Modifier.fillMaxWidth().drawWithContent {
+        drawContent()
         val rtl = layoutDirection == androidx.compose.ui.unit.LayoutDirection.Rtl
         fun x(level: Int): Float {
             val logical = (level * 32 + 18).dp.toPx()
@@ -321,6 +323,13 @@ internal fun ConversationTreeRow(row: ConversationNesting.Row, pinned: Boolean, 
             }
         }
         if (row.threads > 0 && !row.folded) drawLine(line, Offset(x(depth), size.height / 2 + 21.dp.toPx()), Offset(x(depth), size.height), 1.dp.toPx())
+        // Match the list separator without cutting across an expanded tree.
+        if (row.depth == 0 && (row.threads == 0 || row.folded)) {
+            val inset = 56.dp.toPx().coerceAtMost(size.width)
+            val start = if (rtl) 0f else inset
+            val end = if (rtl) size.width - inset else size.width
+            drawLine(line, Offset(start, size.height - 0.5.dp.toPx()), Offset(end, size.height - 0.5.dp.toPx()), 1.dp.toPx())
+        }
     }.padding(start = (depth * 32).dp).semantics {
         stateDescription = "Sub-agent level ${row.depth}"; this.selected = selected
     }) {
@@ -352,7 +361,7 @@ private fun ConversationRow(conversation: AgentConversation, pinned: Boolean, st
                     AgentAvatar(conversation.sessionId, conversation.agentRuntime, size = 36.dp)
                 }
                 Column(Modifier.weight(1f).padding(start = 12.dp)) {
-                    Text(conversation.displayTitle, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(conversation.displayTitle, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Medium), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                         RuntimeMark(conversation.agentRuntime)
                         Text(meta(conversation, status?.takeUnless { it == "Unread" }), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)

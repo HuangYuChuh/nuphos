@@ -664,6 +664,8 @@ fun ChatComposer(
                                 Text(
                                     if (isStreaming) "Queue a message…" else "Ask Nuphos anything…",
                                     style = MaterialTheme.typography.bodyLarge,
+                                    maxLines = if (expanded) 8 else 1,
+                                    overflow = TextOverflow.Ellipsis,
                                     color = colors.onSurfaceVariant,
                                 )
                             }
