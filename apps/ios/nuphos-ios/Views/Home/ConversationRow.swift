@@ -78,12 +78,6 @@ struct ConversationRow: View {
                     .foregroundStyle(Theme.muted)
                     .accessibilityLabel(observation?.status(at: observations.now) ?? "Automatic continuation paused")
             }
-            if conversation.isArchived {
-                Image(systemName: "archivebox")
-                    .font(Theme.Text.label)
-                    .foregroundStyle(Theme.muted)
-                    .accessibilityLabel("Archived")
-            }
         }
         .padding(.vertical, 6)
         .contentShape(Rectangle())

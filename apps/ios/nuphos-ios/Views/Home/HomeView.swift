@@ -51,20 +51,15 @@ struct HomeView: View {
                 }
                 .sharedBackgroundVisibility(.hidden)
 
-                // Search and filter each get their own glass group
+                // Each control gets its own glass group
                 // (ToolbarSpacer(.fixed) splits groups, per the toolbar docs).
-                if page == .agent, let store {
+                if page == .agent, store != nil {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button {
                             isSearching.toggle()
                         } label: {
                             Label("Search agents", systemImage: "magnifyingglass")
                         }
-                    }
-                    ToolbarSpacer(.fixed, placement: .topBarTrailing)
-                    ToolbarItem(placement: .topBarTrailing) {
-                        FilterMenu()
-                            .environment(store)
                     }
                     ToolbarSpacer(.fixed, placement: .topBarTrailing)
                 }
@@ -201,34 +196,6 @@ struct HomeView: View {
             }
             .background(Theme.canvas)
             .onAppear { titleCollapsed = false }
-        }
-    }
-}
-
-/// Which conversations the Agent list shows.
-private struct FilterMenu: View {
-    @Environment(AgentStore.self) private var store
-
-    var body: some View {
-        @Bindable var store = store
-        Menu {
-            Picker("Show", selection: $store.scope) {
-                Label("My agents", systemImage: "person").tag(NuphosAPI.ConversationScope.mine)
-                Label("Team agents", systemImage: "person.2").tag(NuphosAPI.ConversationScope.team)
-            }
-            .pickerStyle(.inline)
-            Picker("Sort", selection: $store.sort) {
-                Label("Date created", systemImage: "calendar").tag(NuphosAPI.ConversationSort.created)
-                Label("Recent activity", systemImage: "clock").tag(NuphosAPI.ConversationSort.activity)
-            }
-            .pickerStyle(.inline)
-            Toggle(isOn: $store.showArchived) {
-                Label("Archived", systemImage: "archivebox")
-            }
-        } label: {
-            Label("Filter agents", systemImage: store.scope == .mine && !store.showArchived && store.sort == .created
-                  ? "line.3.horizontal.decrease"
-                  : "line.3.horizontal.decrease.circle.fill")
         }
     }
 }

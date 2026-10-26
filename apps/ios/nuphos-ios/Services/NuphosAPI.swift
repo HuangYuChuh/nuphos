@@ -45,10 +45,6 @@ extension NuphosAPI {
         return envelope.members
     }
 
-    enum ConversationScope: String { case mine, team, shared }
-    enum ConversationArchiveFilter: String { case exclude, only }
-    enum ConversationSort: String { case activity, created }
-
     /// `GET /agent/conversations`. `teamId` is mandatory; `cursor` is the
     /// `lastActiveAt` of the previous page's last row. Trigger runs are
     /// excluded (no `triggerId`), matching the desktop's "Chats" listing.
@@ -57,20 +53,17 @@ extension NuphosAPI {
         teamId: String,
         cursor: String? = nil,
         limit: Int = 30,
-        scope: ConversationScope = .mine,
-        search: String? = nil,
-        archived: ConversationArchiveFilter? = .exclude,
-        sort: ConversationSort = .activity
+        search: String? = nil
     ) async throws -> AgentConversationsPage {
         var query = [
             URLQueryItem(name: "teamId", value: teamId),
             URLQueryItem(name: "limit", value: String(limit)),
-            URLQueryItem(name: "scope", value: scope.rawValue),
-            URLQueryItem(name: "sort", value: sort.rawValue),
+            URLQueryItem(name: "scope", value: "mine"),
+            URLQueryItem(name: "sort", value: "activity"),
+            URLQueryItem(name: "archived", value: "exclude"),
         ]
         if let cursor { query.append(URLQueryItem(name: "cursor", value: cursor)) }
         if let search, !search.isEmpty { query.append(URLQueryItem(name: "search", value: search)) }
-        if let archived { query.append(URLQueryItem(name: "archived", value: archived.rawValue)) }
         let observedAt = ProcessInfo.processInfo.systemUptime
         let page: AgentConversationsPage = try await get("agent/conversations", query: query, token: token, timeout: 20)
         for row in page.rows {
