@@ -2,7 +2,9 @@ package ai.nuphos.android.ui.agent
 
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.ExpandLess
@@ -36,9 +38,12 @@ import androidx.compose.material.icons.outlined.Unarchive
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.Surface
+import androidx.compose.material3.CircularProgressIndicator
+import ai.nuphos.android.ui.components.AgentAvatar
+import ai.nuphos.android.ui.components.RuntimeMark
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
@@ -58,6 +63,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -154,11 +160,10 @@ fun AgentPage(
     val pins = store.pinnedShortcuts
     var foldedIds by rememberSaveable(account, team?.id) { mutableStateOf(emptyList<String>()) }
     val tree = remember(store.conversations, pins, foldedIds, account) {
-        ConversationNesting.nest(store.conversations, pins.mapTo(mutableSetOf()) { it.sessionId }, foldedIds.toSet(), account)
+        PinnedHistory.nest(store.conversations, pins, foldedIds.toSet(), account)
     }
-    val treeSections = remember(tree) { tree.rows.groupBy { it.section } }
+    val historyItems = remember(tree, pins) { PinnedHistory.items(tree, pins) }
     LaunchedEffect(tree.rows.map { Triple(it.conversation.sessionId, it.depth, it.section) }) { rowInteractions.dismiss() }
-    val shortcuts = pins.filter { it.sessionId !in tree.loadedPinnedIds }
     LaunchedEffect(store, store.selectedTeam?.id) { store.loadFavorites() }
     LaunchedEffect(listState, store.hasMore, store.conversations) {
         snapshotFlow { listState.layoutInfo.visibleItemsInfo.map { it.key } }
@@ -171,10 +176,6 @@ fun AgentPage(
     }
 
     Column(Modifier.fillMaxSize().dismissRowActionsOnOutsidePress(rowInteractions)) {
-        Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = !store.archivedOnly, onClick = { store.updateArchivedOnly(false) }, label = { Text("Active") })
-            FilterChip(selected = store.archivedOnly, onClick = { store.updateArchivedOnly(true) }, label = { Text("Archived") })
-        }
         if (searching) {
             SearchField(
                 value = store.search,
@@ -227,8 +228,9 @@ fun AgentPage(
                 store.conversations.isEmpty() && pins.isEmpty() -> {
                     RefreshableHistoryState { EmptyState(
                         icon = Icons.Outlined.ChatBubbleOutline,
-                        title = if (store.search.isEmpty()) "No agents yet" else "No matches",
+                        title = if (store.search.isNotEmpty()) "No matches" else if (store.archivedOnly) "No archived agents" else "No agents yet",
                         body = if (store.search.isNotEmpty()) "No agents match your search."
+                            else if (store.archivedOnly) "Idle agents are archived automatically after a week."
                             else if (showComposer) "Start an agent from the bar below."
                             else "Start an agent in the pane beside this list.",
                     ) }
@@ -238,42 +240,40 @@ fun AgentPage(
                         modifier = Modifier.fillMaxSize(),
                         state = listState,
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(0.dp),
                     ) {
-                        for (section in ConversationNesting.Section.entries) {
-                            val rows = treeSections[section].orEmpty()
-                            if (rows.isNotEmpty() || (section == ConversationNesting.Section.Pinned && shortcuts.isNotEmpty())) {
-                                item(key = "section:$section") { Text(section.title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                            }
-                            if (section == ConversationNesting.Section.Pinned) {
-                                items(shortcuts, key = { it.listKey }) { pin ->
+                        items(historyItems, key = { it.key }) { item ->
+                            when (item) {
+                                is PinnedHistory.Item.Missing -> {
+                                    val pin = item.shortcut
                                     Card(Modifier.fillMaxWidth().clickable {
                                         nav.navigate("conversation/${android.net.Uri.encode(pin.sessionId)}") { popUpTo("home"); launchSingleTop = true }
                                     }) {
                                         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(Icons.Outlined.PushPin, contentDescription = "Pinned agent")
+                                            PinnedAvatar(true) { Icon(Icons.Outlined.ChatBubbleOutline, contentDescription = null) }
                                             Text(pin.title, Modifier.padding(start = 12.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
                                         }
                                     }
                                 }
-                            }
-                            items(rows, key = { "history:${it.conversation.sessionId}" }) { row ->
-                                ConversationTreeRow(row, store.favorites?.contains(row.conversation.sessionId) == true,
-                                    ConversationNesting.status(row) { store.historyObservation(it)?.label(maxOf(statusClock, RuntimeObservation.now())) },
-                                    onWatch = if (store.canWatch(row.conversation)) ({ scope.launch { store.setWatching(row.conversation) } }) else null,
-                                    watchBusy = store.watchingSessionId != null,
-                                    onUnlink = if (store.canUnlink(row.conversation)) ({ store.clearUnlinkError(); unlinkTarget = row.conversation }) else null,
-                                    unlinking = store.unlinkingSessionId == row.conversation.sessionId,
-                                    interactions = rowInteractions,
-                                    onPin = { scope.launch { store.pin(row.conversation, store.favorites?.contains(row.conversation.sessionId) != true) } },
-                                    pinEnabled = store.canPin(row.conversation),
-                                    onArchive = if (store.canArchive(row.conversation)) ({ store.clearRowActionError(); archiveTarget = row.conversation }) else null,
-                                    actionBusy = store.rowActionSessionId != null,
-                                    onToggle = {
-                                        foldedIds = if (row.conversation.sessionId in foldedIds) foldedIds - row.conversation.sessionId else foldedIds + row.conversation.sessionId
-                                    },
-                                    onClick = { nav.navigate("conversation/${android.net.Uri.encode(row.conversation.sessionId)}") { popUpTo("home"); launchSingleTop = true } },
-                                    selected = row.conversation.sessionId == selectedSessionId)
+                                is PinnedHistory.Item.Loaded -> {
+                                    val row = item.row
+                                    ConversationTreeRow(row, store.favorites?.contains(row.conversation.sessionId) == true,
+                                        ConversationNesting.status(row) { store.historyObservation(it)?.label(maxOf(statusClock, RuntimeObservation.now())) },
+                                        onWatch = if (store.canWatch(row.conversation)) ({ scope.launch { store.setWatching(row.conversation) } }) else null,
+                                        watchBusy = store.watchingSessionId != null,
+                                        onUnlink = if (store.canUnlink(row.conversation)) ({ store.clearUnlinkError(); unlinkTarget = row.conversation }) else null,
+                                        unlinking = store.unlinkingSessionId == row.conversation.sessionId,
+                                        interactions = rowInteractions,
+                                        onPin = { scope.launch { store.pin(row.conversation, store.favorites?.contains(row.conversation.sessionId) != true) } },
+                                        pinEnabled = store.canPin(row.conversation),
+                                        onArchive = if (store.canArchive(row.conversation)) ({ store.clearRowActionError(); archiveTarget = row.conversation }) else null,
+                                        actionBusy = store.rowActionSessionId != null,
+                                        onToggle = {
+                                            foldedIds = if (row.conversation.sessionId in foldedIds) foldedIds - row.conversation.sessionId else foldedIds + row.conversation.sessionId
+                                        },
+                                        onClick = { nav.navigate("conversation/${android.net.Uri.encode(row.conversation.sessionId)}") { popUpTo("home"); launchSingleTop = true } },
+                                        selected = row.conversation.sessionId == selectedSessionId)
+                                }
                             }
                         }
                         if (store.hasMore) {
@@ -306,16 +306,31 @@ private fun RefreshableHistoryState(content: @Composable () -> Unit) {
 internal fun ConversationTreeRow(row: ConversationNesting.Row, pinned: Boolean, status: String?, onToggle: () -> Unit, onClick: () -> Unit, onUnlink: (() -> Unit)? = null, unlinking: Boolean = false, onWatch: (() -> Unit)? = null, watchBusy: Boolean = false, selected: Boolean = false, interactions: ConversationRowInteractions = remember { ConversationRowInteractions() }, onPin: (() -> Unit)? = null, pinEnabled: Boolean = true, onArchive: (() -> Unit)? = null, actionBusy: Boolean = false) {
     val depth = row.depth.coerceAtMost(4)
     val line = MaterialTheme.colorScheme.outlineVariant
-    Box(Modifier.fillMaxWidth().drawBehind {
-        if (depth > 0) {
-            val indent = (depth * 16).dp.toPx()
-            val rtl = layoutDirection == androidx.compose.ui.unit.LayoutDirection.Rtl
-            val x = if (rtl) size.width - indent + 8.dp.toPx() else indent - 8.dp.toPx()
-            val end = if (rtl) size.width - indent else indent
-            drawLine(line, Offset(x, 0f), Offset(x, size.height / 2), 1.dp.toPx())
-            drawLine(line, Offset(x, size.height / 2), Offset(end, size.height / 2), 1.dp.toPx())
+    Box(Modifier.fillMaxWidth().drawWithContent {
+        drawContent()
+        val rtl = layoutDirection == androidx.compose.ui.unit.LayoutDirection.Rtl
+        fun x(level: Int): Float {
+            val logical = (level * 32 + 18).dp.toPx()
+            return if (rtl) size.width - logical else logical
         }
-    }.padding(start = (depth * 16).dp).semantics {
+        for (level in 0 until depth) {
+            val branch = x(level)
+            if (row.trail.getOrNull(level) == true) drawLine(line, Offset(branch, 0f), Offset(branch, size.height), 1.dp.toPx())
+            if (level == depth - 1) {
+                drawLine(line, Offset(branch, 0f), Offset(branch, size.height / 2), 1.dp.toPx())
+                val end = if (rtl) size.width - (depth * 32 - 3).dp.toPx() else (depth * 32 - 3).dp.toPx()
+                drawLine(line, Offset(branch, size.height / 2), Offset(end, size.height / 2), 1.dp.toPx())
+            }
+        }
+        if (row.threads > 0 && !row.folded) drawLine(line, Offset(x(depth), size.height / 2 + 21.dp.toPx()), Offset(x(depth), size.height), 1.dp.toPx())
+        // Match the list separator without cutting across an expanded tree.
+        if (row.depth == 0 && (row.threads == 0 || row.folded)) {
+            val inset = 56.dp.toPx().coerceAtMost(size.width)
+            val start = if (rtl) 0f else inset
+            val end = if (rtl) size.width - inset else size.width
+            drawLine(line, Offset(start, size.height - 0.5.dp.toPx()), Offset(end, size.height - 0.5.dp.toPx()), 1.dp.toPx())
+        }
+    }.padding(start = (depth * 32).dp).semantics {
         stateDescription = "Sub-agent level ${row.depth}"; this.selected = selected
     }) {
         ConversationRow(row.conversation, pinned, status, row.threads, row.folded, onToggle, onClick, onUnlink, unlinking, onWatch, watchBusy, selected, interactions, onPin, pinEnabled, onArchive, actionBusy)
@@ -333,30 +348,24 @@ private fun ConversationRow(conversation: AgentConversation, pinned: Boolean, st
             if (conversation.isArchived) Icons.Outlined.Unarchive else Icons.Outlined.Archive, !actionBusy, onArchive))
     }
     ConversationRowActions(conversation.sessionId, actions, interactions, onClick) { surface, more ->
-        Card(
+        Surface(
             modifier = Modifier.fillMaxWidth().then(surface),
-            colors = CardDefaults.cardColors(containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerLow),
-            shape = MaterialTheme.shapes.large,
-            elevation = CardDefaults.cardElevation(0.dp),
+            color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.background,
+            shape = MaterialTheme.shapes.small,
         ) {
             Row(
-                Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                Modifier.padding(horizontal = 4.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                NuphosAvatar(
-                    NuphosUser(
-                        id = conversation.owner?.id.orEmpty(),
-                        email = conversation.owner?.email.orEmpty(),
-                        name = conversation.owner?.name.orEmpty(),
-                        avatarURL = conversation.owner?.avatarURL.orEmpty(),
-                    ),
-                    size = 40.dp,
-                )
+                PinnedAvatar(pinned) {
+                    AgentAvatar(conversation.sessionId, conversation.agentRuntime, size = 36.dp)
+                }
                 Column(Modifier.weight(1f).padding(start = 12.dp)) {
-                    Text(conversation.displayTitle, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    if (status != null) Text(status, style = MaterialTheme.typography.labelSmall)
-                    else if (HistoryStatus.unread(conversation)) Text("Unread", style = MaterialTheme.typography.labelSmall)
-                    Text(meta(conversation), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(conversation.displayTitle, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Medium), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        RuntimeMark(conversation.agentRuntime)
+                        Text(meta(conversation, status?.takeUnless { it == "Unread" }), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
                 }
                 if (threads > 0) {
                     TextButton(onClick = onToggle, modifier = Modifier.semantics {
@@ -367,10 +376,14 @@ private fun ConversationRow(conversation: AgentConversation, pinned: Boolean, st
                             contentDescription = "${if (folded) "Show" else "Hide"} $threads sub-agents")
                     }
                 }
-                more()
-                if (pinned) {
-                    Icon(Icons.Outlined.PushPin, contentDescription = "Pinned agent", tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(18.dp))
+                if (status == "Running") {
+                    CircularProgressIndicator(Modifier.size(14.dp).semantics { stateDescription = status }, strokeWidth = 1.5.dp)
+                } else if (status != null && status != "Unread") {
+                    Box(Modifier.size(7.dp).background(MaterialTheme.colorScheme.tertiary, CircleShape).semantics { stateDescription = status })
+                } else if (status == "Unread" || HistoryStatus.unread(conversation)) {
+                    Box(Modifier.size(7.dp).background(MaterialTheme.colorScheme.primary, CircleShape).semantics { stateDescription = "Unread reply" })
                 }
+                more()
                 if (conversation.isArchived) {
                     Icon(Icons.Outlined.Archive, contentDescription = "Archived", tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(18.dp))
                 }
@@ -394,17 +407,12 @@ internal fun UnlinkConfirmation(target: AgentConversation, busy: Boolean, error:
     )
 }
 
-private fun meta(conversation: AgentConversation): String {
-    val parts = mutableListOf(HistoryTime.format(conversation.lastActiveAt))
-    if (conversation.messageCount > 0) {
-        parts += "${conversation.messageCount} message${if (conversation.messageCount == 1) "" else "s"}"
-    }
-    conversation.tokenUsage?.costUsd?.takeIf { it > 0 }?.let { cost ->
-        parts += if (cost < 0.01) "<$0.01" else String.format(Locale.US, "$%.2f", cost)
-    }
+private fun meta(conversation: AgentConversation, status: String?): String {
+    val parts = mutableListOf(status ?: HistoryTime.format(conversation.lastActiveAt))
     conversation.activitySource?.origin?.takeIf { it != "nuphos" && it != "unknown" }?.let {
         parts += it.replaceFirstChar { c -> c.uppercase() }
     }
+    conversation.runtimeLabel?.takeIf { it.isNotBlank() }?.let { parts += it }
     return parts.joinToString(" · ")
 }
 
@@ -446,6 +454,7 @@ fun NewChatComposer(nav: NavHostController) {
         if (account != null && team != null && auth.aiAllowed) auth.runtimeSelections.bind(account, team.id) else null
     }
     val quotas = rememberRuntimeQuotas(auth.token, team?.id)
+    val runtimeDevices = rememberRuntimeDevices(auth.token, team?.id)
     var setupVisible by remember { mutableStateOf(false) }
     val setup = remember(account, team, revision, consentRevision, authGeneration, selection) {
         if (team != null && selection != null && auth.token != null) ai.nuphos.android.session.RuntimeSetupStore(
@@ -456,7 +465,7 @@ fun NewChatComposer(nav: NavHostController) {
             { if (auth.generation == authGeneration && auth.user?.id == account) auth.signOut(ai.nuphos.android.data.NuphosApi.Failure.Unauthorized.message) }) else null
     }
     LaunchedEffect(setup) { setupVisible = false }
-    if (setupVisible && setup != null && setup.isSourceCurrent()) RuntimeSetupSheet(setup, { setupVisible = false }, quotas = quotas)
+    if (setupVisible && setup != null && setup.isSourceCurrent()) RuntimeSetupSheet(setup, { setupVisible = false }, quotas = quotas, devices = runtimeDevices)
 
     // The notice opens the picker itself, since the chip it refers to
     // sits in the composer at the bottom of the page.
@@ -510,4 +519,17 @@ fun NewChatComposer(nav: NavHostController) {
         agentEnabled = setup != null && auth.aiAllowed,
         onChooseAgent = { setupVisible = true },
     )
+}
+
+/** An overlay reserves no title width and only marks an explicit favorite. */
+@Composable
+private fun PinnedAvatar(pinned: Boolean, content: @Composable () -> Unit) {
+    Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+        content()
+        if (pinned) Box(Modifier.align(Alignment.TopEnd).size(15.dp)
+            .background(MaterialTheme.colorScheme.primary, CircleShape), contentAlignment = Alignment.Center) {
+            Icon(Icons.Outlined.PushPin, contentDescription = "Pinned agent",
+                tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(9.dp))
+        }
+    }
 }

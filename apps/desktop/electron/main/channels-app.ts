@@ -7,6 +7,7 @@ import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from 'electro
 import * as agentChatSkill from '../agent-chat-skill'
 import { resetAnalyticsUser, setAnalyticsTeam, setAnalyticsUser } from '../analytics'
 import { apiUrl, setApiUrl } from '../api-endpoint'
+import { setSendDiagnostics } from '../crash-reporter'
 import { selectAsciiInputSource } from '../input-source'
 import * as atlas from '../atlas'
 import * as auth from '../auth'
@@ -41,6 +42,9 @@ export const appChannels = {
     atlas.startPersonalCredential(provider),
   'atlas:deletePersonalCredential': (_e: unknown, provider: PersonalCredentialProvider) =>
     atlas.deletePersonalCredential(provider),
+  'atlas:listSignInSessions': () => atlas.listSignInSessions(),
+  'atlas:signOutSession': (_e: unknown, id: string) => atlas.signOutSession(id),
+  'atlas:signOutOtherSessions': () => atlas.signOutOtherSessions(),
   'auth:uploadAvatar': (_e: unknown, image: Uint8Array) => uploadAvatar(image),
   'auth:removeAvatar': () => removeAvatar(),
   'auth:status': () => auth.status(),
@@ -66,6 +70,7 @@ export const appChannels = {
   'analytics:setTeam': (_e: unknown, teamId: string | null) => {
     setAnalyticsTeam(teamId)
   },
+  'diagnostics:set': (_e: unknown, send: unknown) => setSendDiagnostics(send),
   'app:getVersion': () => app.getVersion(),
   'app:setApiEndpoint': (_e: unknown, url: string | null) => setApiUrl(url),
   'app:getPlatform': () => process.platform,

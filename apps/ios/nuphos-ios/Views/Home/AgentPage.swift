@@ -207,11 +207,9 @@ struct AgentPage: View {
             }
         case .loaded where store.listedConversations.isEmpty:
             ContentUnavailableView {
-                Label(store.search.isEmpty ? (store.showArchived ? "No archived agents" : "No agents yet") : "No matches", systemImage: store.showArchived ? "archivebox" : "message")
+                Label(store.search.isEmpty ? "No agents yet" : "No matches", systemImage: "message")
             } description: {
-                Text(store.search.isEmpty
-                     ? (store.showArchived ? "Idle agents are archived automatically after a week." : "Start an agent from the bar below.")
-                     : "No agents match your search.")
+                Text(store.search.isEmpty ? "Start an agent from the bar below." : "No agents match your search.")
             }
         case .loaded:
             EmptyView()
@@ -221,11 +219,11 @@ struct AgentPage: View {
     @ViewBuilder
     private func rowActions(_ conversation: AgentConversation) -> some View {
         if conversation.canManage { Button {
-            Task { await store.setArchived(!conversation.isArchived, conversation: conversation) }
+            Task { await store.archive(conversation) }
         } label: {
-            Label(conversation.isArchived ? "Restore" : "Archive", systemImage: conversation.isArchived ? "tray.and.arrow.up" : "archivebox")
+            Label("Archive", systemImage: "archivebox")
         }
-        .tint(conversation.isArchived ? .blue : .orange) }
+        .tint(.orange) }
         Button {
             Task { try? await store.setPinned(!store.isPinned(conversation.sessionId), sessionId: conversation.sessionId, title: conversation.displayTitle) }
         } label: {

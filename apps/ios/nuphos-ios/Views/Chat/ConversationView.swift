@@ -142,13 +142,17 @@ struct ConversationView: View {
                                     updating = true
                                     defer { updating = false }
                                     do {
-                                        try await session.setArchived(!session.isArchived)
-                                        store.removeFromList(session.sessionId)
-                                        // Either direction takes the chat out
-                                        // of the list it was opened from, so
-                                        // stay there rather than on a chat
-                                        // that no longer belongs.
-                                        dismiss()
+                                        let archiving = !session.isArchived
+                                        try await session.setArchived(archiving)
+                                        // An archived chat leaves the list,
+                                        // so go back to it; a restored one
+                                        // rejoins it.
+                                        if archiving {
+                                            store.removeFromList(session.sessionId)
+                                            dismiss()
+                                        } else {
+                                            await store.reload()
+                                        }
                                     } catch { archiveError = error.localizedDescription }
                                 }
                             } label: {

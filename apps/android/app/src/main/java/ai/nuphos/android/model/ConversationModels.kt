@@ -55,6 +55,9 @@ data class AgentConversation(
     val unread: JsonValue? = null,
     val parentSessionId: String? = null,
     val canManage: Boolean? = null,
+    val agentRuntime: String? = null,
+    val runtimeId: String? = null,
+    val runtimeLabel: String? = null,
 ) {
     @Transient
     val id: String get() = sessionId
@@ -116,7 +119,13 @@ data class AgentConversationDetail(
     @Serializable(with = InstantAsStringSerializerNullable::class)
     val archivedAt: Instant? = null,
     val credentialAccess: JsonValue? = null,
+    val timelineEvents: List<TimelineEvent> = emptyList(),
 ) {
+    @Serializable
+    data class TimelineEvent(
+        @Serializable(with = InstantAsStringSerializer::class) val at: Instant,
+        val text: String,
+    )
     @Serializable
     data class ActiveRun(
         val streamId: String,

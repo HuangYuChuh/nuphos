@@ -7,10 +7,12 @@ import {
   FileText,
   KeyRound,
   Monitor,
+  MonitorSmartphone,
   NotebookPen,
   RefreshCw,
   ScrollText,
   Settings,
+  ShieldCheck,
   Sparkles,
   SquareTerminal,
   SunMedium,
@@ -95,6 +97,7 @@ const USER_GROUPS: SettingsNavGroup[] = [
     items: [
       { key: 'account.profile', label: 'Profile', icon: CircleUserRound },
       { key: 'account.personalCredentials', label: 'Personal Credentials', icon: KeyRound },
+      { key: 'account.devices', label: 'Signed-in devices', icon: MonitorSmartphone },
     ],
   },
   {
@@ -103,6 +106,7 @@ const USER_GROUPS: SettingsNavGroup[] = [
       { key: 'device.appearance', label: 'Appearance', icon: SunMedium },
       { key: 'device.localExec', label: 'Local exec', icon: SquareTerminal },
       { key: 'device.localRuntime', label: 'Local runtime', icon: Monitor },
+      { key: 'device.privacy', label: 'Privacy', icon: ShieldCheck },
     ],
   },
 ]

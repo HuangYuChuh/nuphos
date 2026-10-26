@@ -7,17 +7,28 @@ export type AuthSessionListener = (next: string | null, prev: string | null) => 
 
 export class AuthSession {
   private token: string | null = null
+  private user: string | null = null
   private readonly listeners = new Set<AuthSessionListener>()
 
   current(): string | null {
     return this.token
   }
 
-  set(token: string | null): void {
-    if (token === this.token) return
+  /** The signed-in user's id. Tokens are opaque, so it is kept beside them. */
+  userId(): string | null {
+    return this.user
+  }
+
+  // Token and user always change together: tokens are opaque, so a caller
+  // that left the user out would silently forget who is signed in.
+  set(token: string | null, userId: string | null): void {
+    const user = token ? userId : null
+
+    if (token === this.token && user === this.user) return
     const prev = this.token
 
     this.token = token
+    this.user = user
     for (const listener of this.listeners) listener(token, prev)
   }
 
