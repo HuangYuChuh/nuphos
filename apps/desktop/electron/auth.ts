@@ -4,9 +4,9 @@ import { shell } from 'electron'
 
 // Extension-qualified so this module also resolves under plain node ESM, which
 // is how auth-login.test.ts drives login().
-import { apiUrl } from './api-endpoint.ts'
+import { apiUrl, setApiUrl } from './api-endpoint.ts'
 import { listenOnLoopback } from './auth/callback-server.ts'
-import { apiErrorMessage, sessionToken, writeConfig } from './auth/config.ts'
+import { apiErrorMessage, requestContext, writeConfig } from './auth/config.ts'
 import { completeLegacyLogin } from './auth/legacy.ts'
 import { completeNativeLogin } from './auth/native.ts'
 import { planLogin } from './auth/plan.ts'
@@ -107,17 +107,36 @@ export async function logout() {
     pendingServer.close()
     pendingServer = null
   }
-  const token = await sessionToken()
+  const { api, token } = await requestContext()
 
   // Signed out here first; ending the session on the server is best effort.
   await writeConfig({})
-  if (token) {
-    await fetch(`${apiUrl()}/auth/sessions/current`, {
-      method: 'DELETE',
-      headers: { authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(5_000),
-    }).catch(() => undefined)
+  if (token) await endServerSession(api, token)
+}
+
+/**
+ * Points the app at another backend (`null` restores the launch-time one). A
+ * sign-in belongs to the backend that issued it, so it ends there, on disk as
+ * well as in memory: no launch sends it to the new backend.
+ */
+export async function changeBackend(url: string | null): Promise<string> {
+  const { api, token } = await requestContext()
+  const next = setApiUrl(url)
+
+  if (next !== api && token) {
+    await writeConfig({})
+    void endServerSession(api, token)
   }
+
+  return next
+}
+
+async function endServerSession(api: string, token: string): Promise<void> {
+  await fetch(`${api}/auth/sessions/current`, {
+    method: 'DELETE',
+    headers: { authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(5_000),
+  }).catch(() => undefined)
 }
 
 export function cancelPendingLogin() {
