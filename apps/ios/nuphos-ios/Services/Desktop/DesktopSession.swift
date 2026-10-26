@@ -27,6 +27,9 @@ final class DesktopSession {
     private(set) var controlling = false
     /// The display the runtime gave this session; a Mac's own screen is always 0.
     private(set) var display: Int?
+    /// Debug builds show where time goes: the last update's size and how long
+    /// it took after being asked for, and how much has arrived unread.
+    private(set) var stats = ""
     var isMacScreen: Bool { display == 0 }
     /// Modifiers tapped on the key row, held for the next key or click.
     private(set) var latched: [UInt32] = []
@@ -142,11 +145,13 @@ final class DesktopSession {
         defer { socket.cancel(with: .goingAway, reason: nil) }
 
         let (chunks, input) = AsyncThrowingStream<[UInt8], Error>.makeStream()
+        let received = ByteCount()
         let receiver = Task.detached {
             do {
                 while true {
                     guard case .string(let text) = try await socket.receive() else { continue }
                     guard let data = Data(base64Encoded: text) else { throw RFBClient.Failure.unexpected("frame") }
+                    received.add(data.count)
                     input.yield(Array(data))
                 }
             } catch { input.finish(throwing: error) }
@@ -171,7 +176,11 @@ final class DesktopSession {
             pointer: { x, y in
                 Task { @MainActor in self.serverMoved(to: CGPoint(x: x, y: y)) }
             },
-            clipboard: { _ in }
+            clipboard: { _ in },
+            update: { bytes, seconds, consumed in
+                let line = String(format: "%.0f KB in %.2f s · %.0f KB unread", Double(bytes) / 1024, seconds, Double(received.value - consumed) / 1024)
+                Task { @MainActor in self.stats = line }
+            }
         )
         try await withTaskCancellationHandler {
             try await Task.detached {
@@ -381,6 +390,14 @@ final class DesktopSession {
         if status == 404 { throw OpenFailure(message: "This agent's computer can't show a desktop. Update Nuphos on it, or check that it is online.") }
         throw OpenFailure(message: json?["error"]?["message"]?.stringValue ?? "The desktop could not be opened (\(status)).")
     }
+}
+
+/// Bytes the socket has delivered, counted on the receiving task.
+nonisolated private final class ByteCount: @unchecked Sendable {
+    private let lock = NSLock()
+    private var total = 0
+    var value: Int { lock.withLock { total } }
+    func add(_ count: Int) { lock.withLock { total += count } }
 }
 
 /// Hands the newest screen to the main thread as an image. While one image

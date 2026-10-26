@@ -8,6 +8,8 @@ nonisolated final class RFBByteStream {
     private var iterator: AsyncThrowingStream<[UInt8], Error>.Iterator
     private var buffer: [UInt8] = []
     private var offset = 0
+    /// Every byte the protocol has read so far.
+    private(set) var consumed = 0
 
     init(_ chunks: AsyncThrowingStream<[UInt8], Error>) {
         iterator = chunks.makeAsyncIterator()
@@ -20,7 +22,7 @@ nonisolated final class RFBByteStream {
             offset = 0
             buffer += chunk
         }
-        defer { offset += count }
+        defer { offset += count; consumed += count }
         return Array(buffer[offset..<(offset + count)])
     }
 
@@ -65,6 +67,8 @@ nonisolated final class RFBClient {
         /// Where the server's pointer went when something else moved it.
         var pointer: @Sendable (_ x: Int, _ y: Int) -> Void
         var clipboard: @Sendable (String) -> Void
+        /// After each update: its bytes, the seconds since it was asked for, and all bytes read so far.
+        var update: (@Sendable (_ bytes: Int, _ seconds: Double, _ consumed: Int) -> Void)? = nil
     }
 
     /// The largest screen and pointer shape accepted, and the longest text or
@@ -81,6 +85,8 @@ nonisolated final class RFBClient {
     private let handlers: Handlers
     private var framebuffer = RFBFramebuffer(width: 0, height: 0)
     private let zlib = ZlibStream()
+    private var requested = Date()
+    private var consumedBefore = 0
 
     init(send: @escaping @Sendable ([UInt8]) -> Void, handlers: Handlers) {
         self.send = send
@@ -93,6 +99,9 @@ nonisolated final class RFBClient {
             switch try await input.u8() {
             case 0:
                 try await update(input)
+                handlers.update?(input.consumed - consumedBefore, Date().timeIntervalSince(requested), input.consumed)
+                consumedBefore = input.consumed
+                requested = Date()
                 send(Self.updateRequest(incremental: true, width: framebuffer.width, height: framebuffer.height))
             case 1:
                 _ = try await input.read(3)
@@ -144,6 +153,8 @@ nonisolated final class RFBClient {
         framebuffer.resize(width: width, height: height)
         send(Self.pixelFormat)
         send([2, 0] + be16(Self.encodings.count) + Self.encodings.flatMap { be32(Int(UInt32(bitPattern: $0))) })
+        consumedBefore = input.consumed
+        requested = Date()
         send(Self.updateRequest(incremental: false, width: width, height: height))
         handlers.ready(width, height)
     }
