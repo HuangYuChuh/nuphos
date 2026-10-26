@@ -7,6 +7,7 @@ permissions:
   contents: read
 jobs:
   demo:
+    if: false
     runs-on: xcode-27
     timeout-minutes: 45
     env:
@@ -58,7 +59,6 @@ jobs:
           path: out/
 
   probe:
-    if: false
     runs-on: xcode-27
     timeout-minutes: 20
     env:
