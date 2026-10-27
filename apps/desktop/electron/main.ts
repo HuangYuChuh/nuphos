@@ -54,6 +54,7 @@ import { prepareFirstLaunch } from './main/first-launch'
 import { initLocalRuntime, stopLocalRuntime } from './main/local-runtime'
 import { resumeLocalSetupSync } from './main/local-setup-watch'
 import { installApplicationMenu } from './main/menu'
+import { applyAppIcon, readAppIcon } from './main/app-icon'
 import { readPersistedThemeSource } from './main/theme'
 import { initAutoUpdaterEvents, startUpdatePolling, stopUpdatePolling } from './main/updater'
 import { initWebviewGuard } from './main/webview-guard'
@@ -222,6 +223,7 @@ app
       is_dev: isDev,
     })
     nativeTheme.themeSource = readPersistedThemeSource()
+    applyAppIcon(readAppIcon())
     // When the OS appearance changes while themeSource follows it ('system'), the
     // renderer's own `matchMedia('prefers-color-scheme')` change event is
     // unreliable in Electron, so forward the native signal to every window. The

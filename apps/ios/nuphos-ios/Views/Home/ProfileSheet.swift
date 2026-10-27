@@ -11,6 +11,7 @@ struct ProfileSheet: View {
     @AppStorage(BotAvatars.enabledKey) private var botAvatars = true
 
     @State private var confirmSignOut = false
+    @State private var showAppIcons = false
     @State private var privacyError: String?
     @AppStorage(Whisper.promptKey) private var whisperPrompt = Whisper.defaultPrompt
 
@@ -56,6 +57,9 @@ struct ProfileSheet: View {
 
                 Section {
                     Toggle("Bot avatars", isOn: $botAvatars)
+                    #if os(iOS)
+                    NavigationLink("App icon") { AppIconPicker() }
+                    #endif
                 } header: {
                     Text("Appearance")
                 } footer: {
@@ -91,6 +95,12 @@ struct ProfileSheet: View {
             }
             .scrollContentBackground(.hidden)
             .background(Theme.canvas)
+            #if os(iOS)
+            .navigationDestination(isPresented: $showAppIcons) { AppIconPicker() }
+            #endif
+            #if DEBUG
+            .onAppear { if ProcessInfo.processInfo.arguments.contains("-show-app-icons") { showAppIcons = true } }
+            #endif
             .sheet(isPresented: $editing) { EditProfileSheet(user: currentUser) }
             .refreshable { await session.refreshUser() }
             .navigationTitle("Account")
