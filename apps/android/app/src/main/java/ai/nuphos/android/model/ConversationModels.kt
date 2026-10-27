@@ -94,7 +94,12 @@ data class AgentConversationsPage(
     val conversations: List<AgentConversation> = emptyList(),
     val nextCursor: String? = null,
     val hasMore: Boolean = false,
-)
+    val parents: List<AgentConversation>? = null,
+) {
+    /** Authorized ancestors supplied by the server; pagination stays on conversations. */
+    val rows: List<AgentConversation>
+        get() = (conversations + parents.orEmpty()).distinctBy { it.sessionId }
+}
 
 @Serializable
 data class AgentConversationDetail(

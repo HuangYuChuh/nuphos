@@ -59,9 +59,9 @@ class RuntimesStore(
 
 data class RuntimeGroup(val key: String, val title: String, val device: RuntimeDevice?, val runtimes: List<AgentRuntime>)
 fun runtimeGroups(runtimes: List<AgentRuntime>, devices: List<RuntimeDevice>): List<RuntimeGroup> =
-    runtimes.groupBy { if (it.kind == "local") "device:${it.local?.deviceId ?: "runtime:${it.id}"}" else "cloud" }
+    runtimes.groupBy { it.local?.deviceId?.let { id -> "device:$id" } ?: if (it.kind == "managed") "cloud" else "runtime:${it.id}" }
         .map { (key, rows) ->
             val host = rows.first().local
             val device = host?.deviceId?.let { id -> devices.firstOrNull { it.id == id } }
-            RuntimeGroup(key, if (key == "cloud") "Cloud and servers" else device?.label ?: host?.deviceLabel ?: "Computer", device, rows)
+            RuntimeGroup(key, if (key == "cloud") "Cloud" else device?.label ?: host?.deviceLabel ?: rows.first().label, device, rows)
         }.sortedBy { if (it.key == "cloud") 0 else 1 }

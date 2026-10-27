@@ -1,5 +1,9 @@
 package ai.nuphos.android.ui.chat
 
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.HorizontalDivider
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -192,6 +196,7 @@ fun ConversationScreen(
     }
 
     var showAgent by remember(session) { mutableStateOf(false) }
+    var showRuntimeManagement by remember(session, store.workspaceRevision) { mutableStateOf(false) }
     var refreshBrowse by remember(session) { mutableStateOf(0) }
     LaunchedEffect(session, refreshBrowse) {
         if (browsingOnly && refreshBrowse > 0 && store.selectedTeam?.id == browsingTeamId) session.reloadFromServer()
@@ -373,7 +378,20 @@ fun ConversationScreen(
                     ConversationAgentSheet(session, draftAuth.token!!, quotas,
                         isCurrent = { draftAuth.generation == generation && draftAuth.aiAllowed &&
                             store.workspaceRevision == workspaceRevision && store.selectedTeam?.id == session.teamId },
-                        onDismiss = { showAgent = false })
+                        onDismiss = { showAgent = false },
+                        onManage = { showAgent = false; showRuntimeManagement = true })
+                }
+                if (showRuntimeManagement && draftAuth.token != null && draftAuth.aiAllowed && store.selectedTeam?.id == session.teamId) {
+                    ModalBottomSheet(onDismissRequest = { showRuntimeManagement = false; showAgent = true },
+                        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                        containerColor = MaterialTheme.colorScheme.background) {
+                        Column(Modifier.fillMaxWidth().fillMaxHeight()) {
+                            ai.nuphos.android.ui.agent.RuntimePickerHeader(title = "Computers and runtimes",
+                                onClose = { showRuntimeManagement = false; showAgent = true })
+                            HorizontalDivider()
+                            ai.nuphos.android.ui.agent.RuntimesPage()
+                        }
+                    }
                 }
                 androidx.compose.runtime.DisposableEffect(session, store.workspaceRevision, draftAuth.generation) {
                     val modelWorkspaceRevision = store.workspaceRevision
@@ -396,7 +414,6 @@ fun ConversationScreen(
                 }
                 ChatComposer(
                     modelSettings = session.modelSettings,
-                    onChooseAgent = { showAgent = true },
                     mentions = if (store.selectedTeam?.id != draftTeam) null else remember(store, draftTeam, sessionId) {
                         SessionMentionSource(draftTeam, sessionId) { query ->
                             store.mentionableSessions(draftTeam, query)
@@ -415,8 +432,6 @@ fun ConversationScreen(
                             },
                         )
                     },
-                    agentLabel = session.runtimeDeviceLabel,
-                    agentQuota = session.runtimeId?.let { quotas[it] },
                     draft = draft,
                     draftingEnabled = draft != null && draftAuth.aiAllowed && store.selectedTeam != null &&
                         session.loaded && session.loadError == null && !session.readOnly && !session.isArchived,
