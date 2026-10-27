@@ -62,6 +62,19 @@ alphanumeric: it is placed in the connection URI as is.
 stores, so changing it disconnects every runtime. `extraObjects` renders any manifest with the release, such
 as an `ExternalSecret` that fills that Secret.
 
+## Upgrading to 0.2.0
+
+Chart 0.2.0 removes ZSend (Zeabur Email); sign-in codes are sent only through
+Resend. Before you upgrade, create a Resend API key and verify the domain of
+`email.from` in Resend, then:
+
+- set `email.resendApiKey`, and remove `email.provider` and `email.zsendApiKey`; or
+- with `secrets.existingSecret`, add `RESEND_API_KEY` to that Secret.
+
+Without the key, rendering fails (`email.resendApiKey is required`) or the
+backend pod fails with `CreateContainerConfigError`. With an unverified sender,
+sign-in codes are not delivered.
+
 ## Isolation
 
 The runtime executes agent code. Its pod gets no service account token and
