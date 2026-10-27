@@ -26,7 +26,7 @@ import { agentRunKey, agentRuns, claimAgentRunForSession, createAgentRun } from 
 import { streamAgentRunResponse } from './run-stream'
 import { admitRuntimeChat } from './runtime-chat-admission'
 import { isQueued, queuedReply, queueForWaitingRuntime } from './session-queue-share-approval'
-import { admitQueueableChat, queuedChatContext } from './session-queue-turn'
+import { admitQueueableChat, queuedChatContext, queuedChatReply } from './session-queue-turn'
 import {
   assertConversationSendable,
   readTeamIdCandidate,
@@ -124,7 +124,7 @@ agent.post('/chat', async (c) => {
   let releaseAgentRunClaim: (() => void) | null = null
   let queuedItem: PendingUserMessage | undefined
 
-  // The runtime says whether it can take work; a serverQueue send also holds the session claim.
+  // The runtime says whether it can take work; a new message also holds the session claim.
   const runtimeSnapshot = conversationForResume?.claudeCodePreview
     ? await conversationExecutionState(conversationForResume)
     : undefined
@@ -147,7 +147,7 @@ agent.post('/chat', async (c) => {
     }
     const queue = await admitQueueableChat({ ...resumeParams, snapshot: runtimeSnapshot })
 
-    if (queue?.mode === 'queued') return c.json({ status: 'queued', streamId }, 202)
+    if (queue?.mode === 'queued') return queuedChatReply(body, streamId)
     if (queue) [releaseAgentRunClaim, queuedItem] = [queue.release, queue.item]
     else
       await admitRuntimeChat(runtimeSnapshot, {
