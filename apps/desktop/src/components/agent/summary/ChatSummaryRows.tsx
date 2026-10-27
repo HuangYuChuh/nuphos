@@ -3,6 +3,8 @@ import { ArrowUpRight, ExternalLink, Link2, MoreVertical } from 'lucide-react'
 
 import { copyLinkWithFeedback } from '../../../lib/copyLink'
 import { chatRowIndicator } from '../../../lib/runtimeExecution'
+import { ResourceMark } from '../../sidebar/ResourceMark'
+import { resourceStatus } from '../../sidebar/sessionResourcePresentation'
 import { resourceStyle } from '../../sidebar/sessionResourceStyle'
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '../../ui/menu'
 import { toast } from '../../ui/toast'
@@ -111,7 +113,7 @@ export function ChangeRow({
       </span>
       <button
         type="button"
-        title={`${title} · ${resource.state}`}
+        title={`${title} · ${resourceStatus(resource)}`}
         onClick={(event) => onOpen(resource.url, event.metaKey)}
         className={clsx(
           'min-w-0 flex-1 rounded text-left',
@@ -120,8 +122,11 @@ export function ChangeRow({
         )}
       >
         <span className="block truncate text-[13px] leading-5 text-main">{title}</span>
-        <span className="block truncate text-[12px] leading-5 text-tertiary">
-          {changeSubtitle(resource)} · {capitalize(resource.state)}
+        <span className="flex min-w-0 items-center gap-1 text-[12px] leading-5 text-tertiary">
+          <span className="truncate">
+            {changeSubtitle(resource)} · {capitalize(resourceStatus(resource))}
+          </span>
+          <ResourceMark resource={resource} />
         </span>
       </button>
       <Menu>

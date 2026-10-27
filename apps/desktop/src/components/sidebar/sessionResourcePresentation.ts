@@ -14,6 +14,51 @@ export function resourceLabel(resource: SessionResource): string {
   return resource.title.split(/\s+/, 1)[0]
 }
 
+const HEALTH_TEXT = {
+  checks_failed: 'checks failing',
+  changes_requested: 'changes requested',
+  conflict: 'merge conflict',
+} as const
+
+/** What holds up an open PR. A merged or closed PR's last health no longer applies. */
+export function resourceHealth(resource: SessionResource) {
+  return resource.provider === 'github' && resource.state === 'open'
+    ? (resource.health ?? null)
+    : null
+}
+
+/** A resource's state as a person would say it, e.g. `open · checks failing`. */
+export function resourceStatus(resource: SessionResource): string {
+  const health = resourceHealth(resource)
+
+  return health ? `open · ${HEALTH_TEXT[health]}` : resource.state
+}
+
+/** A PR tag's color is its GitHub state alone, as on GitHub: open green, merged purple, closed red. */
+export function pullStateColor(resource: SessionResource) {
+  if (resource.state === 'merged') return 'session-resource-merged'
+  if (resource.state === 'closed') return 'session-resource-closed'
+
+  return 'session-resource-open'
+}
+
+const HEALTH_MARK = {
+  checks_failed: { glyph: 'cross', color: 'session-resource-failing' },
+  changes_requested: { glyph: 'dot', color: 'session-resource-pending' },
+  conflict: { glyph: 'conflict', color: 'session-resource-pending' },
+} as const
+
+/**
+ * The status mark beside an open PR's tag, kept apart from its state color the
+ * way GitHub shows checks next to a PR: a red cross for failing checks, a
+ * yellow dot for requested changes, a conflict marker for a conflict.
+ */
+export function resourceMark(resource: SessionResource) {
+  const health = resourceHealth(resource)
+
+  return health ? HEALTH_MARK[health] : null
+}
+
 /** The whole name, as a list shows it: a PR's number and title, or anything else's title. */
 export function resourceFullLabel(resource: SessionResource): string {
   return resource.provider === 'github'
