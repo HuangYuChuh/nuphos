@@ -59,6 +59,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import ai.nuphos.android.session.ShareApprovalWait
 import ai.nuphos.android.session.ConversationReads
 import ai.nuphos.android.session.AiAccess
 import androidx.compose.runtime.key
@@ -179,6 +180,8 @@ fun ConversationScreen(
         }
         session.pollWhileIdle()
     }
+    // A teammate's computer that asks its owner first: say so until they answer.
+    LaunchedEffect(session, session.runtimeId, session.queuedSends) { session.watchShareApproval() }
 
     // Initial entry, foreground and manual refresh work even during an active turn.
     // Turn completion is a separate event, never a resource polling loop.
@@ -314,6 +317,20 @@ fun ConversationScreen(
                 }
             }
             if (!browsingOnly) {
+                session.shareApproval?.let { wait ->
+                    Surface(
+                        Modifier.padding(horizontal = 16.dp, vertical = 4.dp).fillMaxWidth(),
+                        shape = MaterialTheme.shapes.medium,
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    ) {
+                        Text(
+                            wait.message(session.runtimeDeviceLabel ?: "this computer"),
+                            Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (wait == ShareApprovalWait.Denied) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
                 if (session.runtimeRecoveryRequired) {
                     Text("Message delivery needs to be checked before you send again.", modifier = Modifier.padding(horizontal = 16.dp))
                     TextButton(enabled = session.loaded && !session.readOnly, onClick = session::recoverRuntime) { Text("Check delivery") }
