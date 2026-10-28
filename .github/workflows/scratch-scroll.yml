@@ -35,6 +35,8 @@ jobs:
           xcrun simctl boot "$udid"; xcrun simctl bootstatus "$udid" -b
           xcrun simctl install "$udid" /tmp/dd/Build/Products/Debug-iphonesimulator/nuphos-ios.app
           mkdir -p /tmp/shots
+          shot() { for d in 1 3; do xcrun simctl io "$udid" screenshot --display=$d "$1-d$d.png" >/dev/null 2>&1 || echo "shot $d failed"; done; }
+          set +e
           for v in "" "-hdr-under"; do
             echo "===== VARIANT [$v]"
             launch=$(xcrun simctl launch --terminate-running-process "$udid" ai.nuphos.ios -scroll-regression -hdr-manual $v); pid=${launch##*: }
@@ -48,17 +50,17 @@ jobs:
             for c in n.get("children",[])[:20]:
               if depth<3: walk(c,depth+1)
           for n in (d if isinstance(d,list) else [d]): walk(n)' | head -30 || true
-            tag=$(echo "$v" | tr -d ' -'); xcrun simctl io "$udid" screenshot /tmp/shots/${tag}0-end.png
+            tag=$(echo "$v" | tr -d ' -'); shot /tmp/shots/${tag}0-end
             echo "--- step1: finger down 60pt slowly (toward older)"
             axe swipe --start-x 190 --start-y 400 --end-x 190 --end-y 460 --duration 1.0 --udid "$udid" || echo "swipe failed"
-            sleep 2; xcrun simctl io "$udid" screenshot /tmp/shots/${tag}1-up.png
+            sleep 2; shot /tmp/shots/${tag}1-up
             echo "--- step2: finger up 60pt (back toward latest)"
             axe swipe --start-x 190 --start-y 460 --end-x 190 --end-y 400 --duration 1.0 --udid "$udid" || echo "swipe failed"
-            sleep 2; xcrun simctl io "$udid" screenshot /tmp/shots/${tag}2-down.png
+            sleep 2; shot /tmp/shots/${tag}2-down
             echo "--- step3: quick flick toward older then back"
             axe swipe --start-x 190 --start-y 400 --end-x 190 --end-y 480 --duration 0.3 --udid "$udid" || true
             axe swipe --start-x 190 --start-y 480 --end-x 190 --end-y 400 --duration 0.3 --udid "$udid" || true
-            sleep 2; xcrun simctl io "$udid" screenshot /tmp/shots/${tag}3-flick.png
+            sleep 2; shot /tmp/shots/${tag}3-flick
             xcrun simctl spawn "$udid" log show --last 3m --style compact \
               --predicate "processID == $pid AND eventMessage CONTAINS \"scroll_regression\"" 2>/dev/null \
               | sed 's/.*scroll_regression //' | grep -v "name=trace_scroll.*stack" | cut -c1-260 | tail -120
