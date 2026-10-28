@@ -197,6 +197,14 @@ struct ConversationView: View {
             #endif
         }
         .task { await session.pollWhileIdle() }
+        // A teammate's computer that asks its owner first: say so until they answer.
+        .task(id: "\(ShareApprovalWait.asksOwner(conversationRuntime)).\(session.queuedSends)") {
+            await store.loadRuntimes()
+            guard ShareApprovalWait.asksOwner(conversationRuntime) else { return }
+            while !Task.isCancelled, await session.refreshShareApproval() {
+                try? await Task.sleep(for: .seconds(5))
+            }
+        }
         // New files land while a turn runs; read them once it settles.
         .task(id: "\(session.isStreaming).\(session.messages.count)") {
             await session.refreshResources()
@@ -247,9 +255,21 @@ struct ConversationView: View {
         }
     }
 
-    /// The composer, with any queued messages above it.
+    /// The agent this conversation runs on, when the catalog lists it.
+    private var conversationRuntime: RuntimeInstance? {
+        let id = session.runtimeId ?? session.runtime?.id
+        return store.runtimes.first { $0.id == id }
+    }
+
+    /// The composer, with what waits on the owner of a shared computer and any queued messages above it.
     private var composer: some View {
         VStack(spacing: 0) {
+            if let wait = session.shareApproval, ShareApprovalWait.asksOwner(conversationRuntime) {
+                ShareApprovalStrip(
+                    wait: wait,
+                    computer: conversationRuntime?.local?.deviceLabel ?? "this computer"
+                )
+            }
             if !session.queued.isEmpty {
                 QueuedStrip(
                     items: session.queued,
@@ -730,5 +750,30 @@ struct QueuedStrip: View {
             .padding(.horizontal, 16)
         }
         .padding(.bottom, 6)
+    }
+}
+
+/// A teammate's computer that asks its owner first: the message waits for them, or they declined.
+struct ShareApprovalStrip: View {
+    let wait: ShareApprovalWait
+    let computer: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: wait == .pending ? "hourglass" : "nosign")
+                .font(Theme.Text.label)
+                .foregroundStyle(wait == .pending ? Theme.warning : Color.red)
+            Text(wait.message(computer: computer))
+                .font(Theme.Text.label)
+                .foregroundStyle(Theme.body)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Theme.chatSurface, in: RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal, 16)
+        .padding(.bottom, 6)
+        .accessibilityElement(children: .combine)
     }
 }
