@@ -5,19 +5,25 @@ on:
 jobs:
   scroll:
     runs-on: xcode-27
-    timeout-minutes: 45
+    timeout-minutes: 50
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: { persist-credentials: false }
+      - name: Touch tools
+        run: |
+          brew install cameroncooke/axe/axe || echo "axe install failed"
+          axe --help || true
+          axe swipe --help || true
+          axe touch --help || true
       - name: Build
         working-directory: apps/ios
         run: |
           xcodebuild -project nuphos-ios.xcodeproj -scheme nuphos-ios -configuration Debug \
             -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/dd \
             CODE_SIGNING_ALLOWED=NO build -quiet
-      - name: Variants
+      - name: Real touches
         run: |
           udid=$(xcrun simctl list devices available -j | python3 -c '
           import json,sys
@@ -28,11 +34,39 @@ jobs:
           print(x["udid"]); print(rt, x["name"], file=sys.stderr)')
           xcrun simctl boot "$udid"; xcrun simctl bootstatus "$udid" -b
           xcrun simctl install "$udid" /tmp/dd/Build/Products/Debug-iphonesimulator/nuphos-ios.app
-          for v in "" "-hdr-rule1" "-hdr-under" "-hdr-rule1 -hdr-under"; do
+          mkdir -p /tmp/shots
+          for v in "" "-hdr-under"; do
             echo "===== VARIANT [$v]"
-            status=0; bash apps/ios/tests/scroll-simulator.sh "$udid" $v > /tmp/out.txt 2>&1 || status=$?
-            grep -E "name=(header_|trace_)|FAIL|Timed out" /tmp/out.txt | sed 's/.*scroll_regression //'
-            grep -c "passed=true" /tmp/out.txt || true
-            grep "passed=false" /tmp/out.txt | sed 's/.*scroll_regression //' || true
-            echo "===== EXIT $status"
+            launch=$(xcrun simctl launch --terminate-running-process "$udid" ai.nuphos.ios -scroll-regression -hdr-manual $v); pid=${launch##*: }
+            sleep 25
+            axe describe-ui --udid "$udid" 2>/dev/null | python3 -c 'import json,sys
+          try:
+            d=json.load(sys.stdin)
+          except Exception: sys.exit()
+          def walk(n,depth=0):
+            f=n.get("frame",{}); print("  "*depth, n.get("type"), n.get("AXLabel"), f)
+            for c in n.get("children",[])[:20]:
+              if depth<3: walk(c,depth+1)
+          for n in (d if isinstance(d,list) else [d]): walk(n)' | head -30 || true
+            tag=$(echo "$v" | tr -d ' -'); xcrun simctl io "$udid" screenshot /tmp/shots/${tag}0-end.png
+            echo "--- step1: finger down 60pt slowly (toward older)"
+            axe swipe --start-x 190 --start-y 400 --end-x 190 --end-y 460 --duration 1.0 --udid "$udid" || echo "swipe failed"
+            sleep 2; xcrun simctl io "$udid" screenshot /tmp/shots/${tag}1-up.png
+            echo "--- step2: finger up 60pt (back toward latest)"
+            axe swipe --start-x 190 --start-y 460 --end-x 190 --end-y 400 --duration 1.0 --udid "$udid" || echo "swipe failed"
+            sleep 2; xcrun simctl io "$udid" screenshot /tmp/shots/${tag}2-down.png
+            echo "--- step3: quick flick toward older then back"
+            axe swipe --start-x 190 --start-y 400 --end-x 190 --end-y 480 --duration 0.3 --udid "$udid" || true
+            axe swipe --start-x 190 --start-y 480 --end-x 190 --end-y 400 --duration 0.3 --udid "$udid" || true
+            sleep 2; xcrun simctl io "$udid" screenshot /tmp/shots/${tag}3-flick.png
+            xcrun simctl spawn "$udid" log show --last 3m --style compact \
+              --predicate "processID == $pid AND eventMessage CONTAINS \"scroll_regression\"" 2>/dev/null \
+              | sed 's/.*scroll_regression //' | grep -v "name=trace_scroll.*stack" | cut -c1-260 | tail -120
+            echo "--- scroll traces (offset/inset only)"
+            xcrun simctl spawn "$udid" log show --last 3m --style compact \
+              --predicate "processID == $pid AND eventMessage CONTAINS \"trace_scroll\"" 2>/dev/null \
+              | sed 's/.*scroll_regression //; s/ stack=.*//' | tail -150
           done
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with: { name: shots, path: /tmp/shots }

@@ -211,9 +211,10 @@ final class TranscriptController: UIViewController, UICollectionViewDelegate, Ch
             view.keyboardLayoutGuide.keyboardDismissPadding = height
         }
         let size = collection.bounds.size
+        if trace { UIEventLog.regression(name: "trace_layout", passed: true, detail: "frameY=\(view.convert(collection.frame, to: nil).minY) size=\(size) insetTop=\(collection.adjustedContentInset.top) offset=\(collection.contentOffset.y)") }
         guard size.width > 0, size.height > 0, size != previousSize else { return }
         previousSize = size
-        if trace { UIEventLog.regression(name: "trace_resize", passed: true, detail: "size=\(size) following=\(following) touching=\(touching)") }
+        if trace { UIEventLog.regression(name: "trace_resize", passed: true, detail: "size=\(size) insetTop=\(collection.adjustedContentInset.top) following=\(following) touching=\(touching)") }
         if !positioned || (following && !(TranscriptList.rule1 && touching)) {
             // Inside the keyboard's animation, so the rows travel with it.
             positionAtEnd()
@@ -314,6 +315,7 @@ final class TranscriptController: UIViewController, UICollectionViewDelegate, Ch
 
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
         touching = true
+        if trace { UIEventLog.regression(name: "trace_drag_begin", passed: true, detail: "offset=\(scrollView.contentOffset.y)") }
         layout.keepContentOffsetAtBottomOnBatchUpdates = false
     }
 
@@ -330,6 +332,7 @@ final class TranscriptController: UIViewController, UICollectionViewDelegate, Ch
 
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
         touching = false
+        if trace { UIEventLog.regression(name: "trace_drag_end", passed: true, detail: "offset=\(scrollView.contentOffset.y) decelerate=\(decelerate)") }
         if !decelerate { settle() }
     }
 
@@ -388,6 +391,11 @@ final class TranscriptController: UIViewController, UICollectionViewDelegate, Ch
             UIEventLog.regression(name: name, passed: passed, detail: detail)
         }
         apply()
+        if CommandLine.arguments.contains("-hdr-manual") {
+            // Real touches drive this run; log every move.
+            trace = true
+            return
+        }
         var openingError: CGFloat = 0
         let probe = TranscriptFrameProbe { [weak self] in
             guard let self else { return }
