@@ -1,4 +1,6 @@
 import { liveAttachment } from '@/lib/agent/db/shared'
+import { createMessageMetadata } from '@/lib/agent/message-attribution'
+import { attributionHeader } from '@/lib/agent/message-metadata'
 import { AppError } from '@/lib/errors'
 
 import { resolveConversationChatRuntime } from './conversation-chat-route'
@@ -13,6 +15,7 @@ import { withSessionDesktops } from './session-desktops'
 import { steeringText } from './steering-receipt'
 
 import type { SessionExecutionState } from './runtime-execution-snapshot'
+import type { CliTokenPrincipal } from '@/lib/identity/cli-tokens'
 import type { AgentConversation } from '@/lib/agent/db'
 
 /** No live session to report on: the next prompt starts or restores one. */
@@ -152,7 +155,13 @@ export async function cancelConversationRuntime(conversation: AgentConversation)
  */
 export async function steerConversationRuntime(
   conversation: AgentConversation,
-  steer: { text: string; groupId?: string; userId: string },
+  steer: {
+    text: string
+    groupId?: string
+    userId: string
+    deviceId?: string
+    cliToken?: CliTokenPrincipal
+  },
   messageId: string,
 ): Promise<string> {
   const attachment = liveAttachment(conversation)
@@ -192,11 +201,17 @@ export async function steerConversationRuntime(
 
   try {
     await client.initialize()
+    // The same attribution a prompt carries: without it the agent cannot tell
+    // a mid-turn instruction or approval from its sender's from anyone else's.
     const result = await client.steerSession(
       attachment.openabSessionId,
       text,
       messageId,
       attachments,
+      attributionHeader(
+        messageId,
+        await createMessageMetadata(steer.userId, 'nuphos', steer.deviceId, steer.cliToken),
+      ),
     )
 
     if (result.outcome !== 'injected')
