@@ -46,6 +46,22 @@ final class TranscriptController: UIViewController, UICollectionViewDelegate, Ch
     private var applying = false
     private var pending: (() -> Void)?
     private var previousSize = CGSize.zero
+    /// Diagnostic only (scratch branch): one line per layout pass and offset change.
+    private var lastTracedOffset: CGFloat = .nan
+    private func trace(_ event: String, stack: Bool = false) {
+        var line = String(format: "SCROLLTRACE t=%.3f %@ offset=%.1f frameMinY=%.1f h=%.1f insetTop=%.1f insetBottom=%.1f safeTop=%.1f end=%.1f following=%d tracking=%d dragging=%d decel=%d",
+                          CACurrentMediaTime(), event, collection.contentOffset.y, collection.superview?.convert(collection.frame, to: nil).minY ?? -1,
+                          collection.bounds.height, collection.adjustedContentInset.top, collection.adjustedContentInset.bottom,
+                          view.safeAreaInsets.top, distanceToEnd, following ? 1 : 0, collection.isTracking ? 1 : 0,
+                          collection.isDragging ? 1 : 0, collection.isDecelerating ? 1 : 0)
+        if stack {
+            line += " stack=" + Thread.callStackSymbols.dropFirst(2).prefix(14).map { sym in
+                let parts = sym.split(separator: " ", omittingEmptySubsequences: true)
+                return parts.count > 3 ? String(parts[3]) : sym
+            }.joined(separator: "<")
+        }
+        print(line)
+    }
     private let composer = UIHostingController(rootView: AnyView(EmptyView()))
     let placeholder = UIHostingController(rootView: AnyView(EmptyView()))
     private lazy var composerHeight = composer.view.heightAnchor.constraint(equalToConstant: 0)
@@ -197,6 +213,7 @@ final class TranscriptController: UIViewController, UICollectionViewDelegate, Ch
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        trace("layout")
         // Measured at the page's width: the hosting controller's own intrinsic
         // size has no width, so a long draft would never wrap and grow it.
         let height = ceil(composer.sizeThatFits(in: CGSize(width: view.bounds.width, height: .greatestFiniteMagnitude)).height)
@@ -209,8 +226,10 @@ final class TranscriptController: UIViewController, UICollectionViewDelegate, Ch
         let size = collection.bounds.size
         guard size.width > 0, size.height > 0, size != previousSize else { return }
         previousSize = size
+        trace("resize prev=\(previousSize.height)")
         if !positioned || following {
             // Inside the keyboard's animation, so the rows travel with it.
+            trace("resize->positionAtEnd")
             positionAtEnd()
         }
         animatePendingSend()
@@ -242,6 +261,7 @@ final class TranscriptController: UIViewController, UICollectionViewDelegate, Ch
     /// The end of the content. While a reply still fits below a just-sent
     /// message, the room reserved for it puts that message at the top.
     private func positionAtEnd() {
+        trace("positionAtEnd", stack: true)
         guard collection.bounds.height > 0, let last = rows.indices.last else { return }
         hold {
             layout.restoreContentOffset(with: .init(indexPath: IndexPath(item: last, section: 0), edge: .bottom, offset: 0))
@@ -325,15 +345,19 @@ final class TranscriptController: UIViewController, UICollectionViewDelegate, Ch
     private func updateLatestButton() { latestButton.isHidden = nearBottom }
 
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        trace("dragBegin")
         layout.keepContentOffsetAtBottomOnBatchUpdates = false
     }
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        // Offsets the finger did not cause get a call stack.
+        trace("scroll", stack: !scrollView.isTracking && !scrollView.isDecelerating)
         UIEventLog.chatScroll(sessionId: sessionID, contentOffset: scrollView.contentOffset)
         updateLatestButton()
     }
 
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+        trace("dragEnd decelerate=\(decelerate)")
         if !decelerate { settle() }
     }
 
@@ -344,6 +368,7 @@ final class TranscriptController: UIViewController, UICollectionViewDelegate, Ch
     /// Every way the reader moves the transcript comes to rest here: a drag, a
     /// fling, a status-bar tap, VoiceOver's animated scroll.
     private func settle() {
+        trace("settle")
         following = atEnd
         flushPending()
     }
