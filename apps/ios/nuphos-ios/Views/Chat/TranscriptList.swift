@@ -38,9 +38,10 @@ final class TranscriptController: UIViewController, UICollectionViewDelegate, Ch
     private var submittedID: String?
     private var extendedID: String?
     private var pendingSentAnimationID: String?
-    /// Whether the reader was at the end where they or the transcript last
-    /// came to rest. Read from the position itself, so no event can leave it
-    /// stale; layout settling under the reader does not count as moving.
+    /// Whether the reader is at the end: kept current while they drag or fling
+    /// and read again where they or the transcript come to rest. Read from the
+    /// position itself, so no event can leave it stale; layout settling under
+    /// the reader does not count as moving.
     private var following = true
     private var positioned = false
     private var applying = false
@@ -336,6 +337,9 @@ final class TranscriptController: UIViewController, UICollectionViewDelegate, Ch
         // Offsets the finger did not cause get a call stack.
         trace("scroll", stack: !scrollView.isTracking && !scrollView.isDecelerating)
         UIEventLog.chatScroll(sessionId: sessionID, contentOffset: scrollView.contentOffset)
+        // A header that shrinks or grows mid-gesture (iPhone Duo) resizes the
+        // transcript before the gesture ends; by then the reader has left.
+        if scrollView.isDragging { following = atEnd }
         updateLatestButton()
     }
 
