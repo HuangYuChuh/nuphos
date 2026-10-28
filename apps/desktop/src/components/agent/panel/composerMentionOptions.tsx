@@ -1,8 +1,9 @@
 import clsx from 'clsx'
-import { Laptop, MessageSquare } from 'lucide-react'
+import { Laptop } from 'lucide-react'
 import { useId } from 'react'
 
 import { Avatar } from '../../Avatar'
+import { AgentAvatar } from '../AgentAvatar'
 
 import { deviceDetail } from './composerMention'
 import { optionKey } from './composerMentionChips'
@@ -62,7 +63,14 @@ function MentionOptionRow({
     case 'session':
       return (
         <Row
-          icon={<MessageSquare size={16} className="shrink-0 text-tertiary" />}
+          icon={
+            <AgentAvatar
+              agentId={option.session.sessionId}
+              avatar={option.session.avatar}
+              provider={option.session.agentRuntime}
+              size={18}
+            />
+          }
           label={option.session.title || option.session.firstMessage || 'Untitled agent'}
         />
       )
