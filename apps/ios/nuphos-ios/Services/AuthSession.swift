@@ -230,6 +230,7 @@ final class AuthSession {
         webSession = nil
         clearToken()
         ComposerDrafts.clear()
+        DesktopSession.forgetAccounts()
         // An OpenAI key saved by builds from before voice input moved to Nuphos.
         Keychain.delete("openai-api-key")
         state = .signedOut(error: error)
