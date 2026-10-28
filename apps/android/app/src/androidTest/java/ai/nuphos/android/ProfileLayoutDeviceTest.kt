@@ -1,5 +1,7 @@
 package ai.nuphos.android
 
+import android.content.ComponentName
+import android.content.pm.PackageManager
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.ui.Modifier
@@ -61,6 +63,20 @@ class ProfileLayoutDeviceTest {
         }
         assertEquals(listOf("edit", "devices", "privacy", "withdraw", "delete", "signout"), calls)
         capture("profile-bottom")
+    }
+    @Test fun appIconPickerSwitchesTheLauncherEntry() {
+        render()
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        fun state(id: String) = context.packageManager.getComponentEnabledSetting(ComponentName(context, "ai.nuphos.android.Icon$id"))
+        compose.onNodeWithContentDescription("Son of Man, Peek").performScrollTo()
+        compose.onNodeWithContentDescription("Napoleon, Bleed").assertIsSelected()
+        capture("app-icon")
+        compose.onNodeWithContentDescription("Nuphos").performClick()
+        assertEquals(PackageManager.COMPONENT_ENABLED_STATE_ENABLED, state("A"))
+        assertEquals(PackageManager.COMPONENT_ENABLED_STATE_DISABLED, state("B2"))
+        compose.onNodeWithContentDescription("Napoleon, Bleed").performClick()
+        assertEquals(PackageManager.COMPONENT_ENABLED_STATE_ENABLED, state("B2"))
+        assertEquals(PackageManager.COMPONENT_ENABLED_STATE_DISABLED, state("A"))
     }
     @Test fun busyConsentCannotInvokeWithdrawal() {
         render(busy = true)

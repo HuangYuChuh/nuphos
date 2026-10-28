@@ -1,5 +1,7 @@
-Your agents are listed the way the Desktop sidebar lists them: most recent activity first, with pinned agents in the order you pinned them. The list shows your own agents that aren't archived, so the sort and filter menu is gone.
+One Live Activity now shows your running conversations together, instead of one per conversation.
 
-Account › Signed-in devices shows everywhere your account is signed in, with the app, approximate location and last activity. You can sign out any other device, or all of them at once.
+A new Runtimes page shows your cloud runtimes, Boxes and computers in one place. It takes the place of the Monitoring and Triggers placeholders.
 
-Signing out now also ends the sign-in on the server.
+Nuphos has a new app icon, and you can choose from 16 icons in Account › Appearance › App icon.
+
+Screenshots you paste into the composer are now attached to your message.

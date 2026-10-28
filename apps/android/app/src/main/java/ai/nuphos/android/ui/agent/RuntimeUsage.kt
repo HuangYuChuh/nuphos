@@ -3,7 +3,6 @@ package ai.nuphos.android.ui.agent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.ui.Modifier
 import androidx.compose.material3.Text
@@ -78,7 +77,7 @@ fun RuntimeUsage(quota: RuntimeQuota?, compact: Boolean = false) {
                 DateTimeFormatter.ofPattern("MMM d, HH:mm", locale).withZone(ZoneId.systemDefault()).format(Instant.parse(raw))
             }.getOrNull() }
             val left = (100.0 - window.usedPercent).coerceIn(0.0, 100.0)
-            LinearProgressIndicator(progress = { (left / 100.0).toFloat() }, modifier = Modifier.fillMaxWidth())
+            ContinuousUsageBar(progress = (left / 100.0).toFloat())
             Text((if (compact) "" else "${window.label}: ") + "${String.format(locale, "%.0f", left)}% left" +
                 (reset?.let { " · resets $it" } ?: ""), style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)

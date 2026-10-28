@@ -97,6 +97,9 @@ struct HomeView: View {
                 }
                 .sharedBackgroundVisibility(.hidden)
             }
+            #if DEBUG
+            .onAppear { if ProcessInfo.processInfo.arguments.contains("-show-app-icons") { showProfile = true } }
+            #endif
             .sheet(isPresented: $showProfile) {
                 ProfileSheet(user: user)
             }
@@ -162,9 +165,15 @@ struct HomeView: View {
         .onChange(of: PushNotifications.shared.pendingTarget, initial: true) { _, target in
             if target != nil { page = .agent }
         }
+        .onChange(of: PushNotifications.shared.pendingConversations, initial: true) { _, show in
+            guard show else { return }
+            PushNotifications.shared.pendingConversations = false
+            page = .agent
+            openChat = nil
+        }
     }
 
-    /// DEBUG: `-page monitoring` opens that page directly, for UI checks.
+    /// DEBUG: `-page runtimes` opens that page directly, for UI checks.
     private static var initialPage: HomePage {
         #if DEBUG
         let args = CommandLine.arguments
@@ -185,17 +194,9 @@ struct HomeView: View {
         case .connectors:
             ConnectorsPage()
                 .onAppear { titleCollapsed = false }
-        case .monitoring, .triggers:
-            // A scroll view like the Agent page, so the bar and the top
-            // edge behave the same way here.
-            ScrollView {
-                VStack(spacing: 0) {
-                    PlaceholderPage(page: page)
-                        .containerRelativeFrame(.vertical) { height, _ in height * 0.8 }
-                }
-            }
-            .background(Theme.canvas)
-            .onAppear { titleCollapsed = false }
+        case .runtimes:
+            RuntimesPage()
+                .onAppear { titleCollapsed = false }
         }
     }
 }

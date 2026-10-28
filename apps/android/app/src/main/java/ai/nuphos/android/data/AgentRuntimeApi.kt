@@ -101,7 +101,8 @@ class AgentRuntimeApi internal constructor(private val token: String, teamId: St
             (obj["local"] as? JsonObject)?.get("signedIn")?.jsonPrimitive?.booleanOrNull,
             (obj["local"] as? JsonObject)?.let { local -> RuntimeHost(
                 local["deviceId"]?.jsonPrimitive?.contentOrNull, local["deviceLabel"]?.jsonPrimitive?.contentOrNull,
-                local["online"]?.jsonPrimitive?.booleanOrNull) })
+                local["online"]?.jsonPrimitive?.booleanOrNull,
+                (local["agentLabel"] as? JsonPrimitive)?.takeIf { it.isString }?.content?.takeIf { it.isNotBlank() }) })
             .also { if (!it.id.matches(Regex("[A-Za-z0-9_-]{1,200}"))) throw NuphosApi.Failure.InvalidResponse }
     } catch (_: Exception) { throw NuphosApi.Failure.InvalidResponse }
     private fun decodeLogin(obj: JsonObject): RuntimeLogin = try {

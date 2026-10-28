@@ -188,3 +188,26 @@ test('persisted autonomous message keeps the identity sent with its start event'
   await h.handler.update({ ...context, update: { kind: 'complete' } })
   expect(persistedIds.at(-1)).toBe(h.messageIds[0])
 })
+
+test('a completed autonomous placeholder is not appended as an answer', async () => {
+  const before = persistedIds.length
+  const h = harness()
+
+  await h.handler.update({ ...context, update: { kind: 'text', text: '_(no response)_' } })
+  await h.handler.update({
+    ...context,
+    update: { kind: 'complete', origin: { kind: 'task-notification' } },
+  })
+  expect(persistedIds).toHaveLength(before)
+  expect(h.calls).toEqual(['emit', 'finish'])
+})
+test('a placeholder cannot hide an autonomous runtime interruption', async () => {
+  const h = harness()
+
+  await h.handler.update({ ...context, update: { kind: 'text', text: '_(no response)_' } })
+  await h.handler.update({
+    ...context,
+    update: { kind: 'interrupted', reason: 'connection_closed' },
+  })
+  expect(h.calls).toEqual(['emit', 'error', 'finish'])
+})

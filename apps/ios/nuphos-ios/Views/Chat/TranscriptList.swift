@@ -51,6 +51,15 @@ final class TranscriptController: UIViewController, UICollectionViewDelegate, Ch
     private lazy var composerHeight = composer.view.heightAnchor.constraint(equalToConstant: 0)
     private let latestButton = UIButton(type: .system)
 
+    private let root = RotationLayoutView()
+    override func loadView() { view = root }
+
+    override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
+        super.viewWillTransition(to: size, with: coordinator)
+        // Without a queued animation there is no completion to clear it.
+        root.rotating = coordinator.animate(alongsideTransition: nil) { [root] _ in root.rotating = false }
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .clear
@@ -573,9 +582,47 @@ final class TranscriptController: UIViewController, UICollectionViewDelegate, Ch
             eventProbe.stop()
             check(name, down < 1 && nearBottom, "maxDownward=\(down) frames=\(frames) nearBottom=\(nearBottom)")
         }
+        // A rotation must move rows straight to their new layout. Animated,
+        // each row cross-fades between two cells and its text stretches, so
+        // rows draw over each other until the rotation ends.
+        func animatedRows() -> Int {
+            collection.subviews.compactMap { $0 as? TranscriptCell }.filter { cell in
+                var layers = [cell.layer]
+                while let layer = layers.popLast() {
+                    if layer.animationKeys()?.isEmpty == false { return true }
+                    layers += layer.sublayers ?? []
+                }
+                return false
+            }.count
+        }
+        for (name, orientation) in [("rotate_landscape", UIInterfaceOrientationMask.landscapeRight), ("rotate_portrait", .portrait)] {
+            let width = collection.bounds.width
+            var worst = 0
+            let rotationProbe = TranscriptFrameProbe { worst = max(worst, animatedRows()) }
+            view.window?.windowScene?.requestGeometryUpdate(.iOS(interfaceOrientations: orientation))
+            try? await Task.sleep(for: .seconds(1.5))
+            rotationProbe.stop()
+            check(name, collection.bounds.width != width && worst == 0,
+                  "width=\(width)->\(collection.bounds.width) maxAnimatedRows=\(worst)")
+        }
         check("suite_complete", true, "")
     }
     #endif
+}
+
+/// A rotation resizes the transcript inside the system's animation. Animated,
+/// the collection view cross-fades each row between its old and new layout
+/// and the drawn text stretches, so rows draw over each other for a moment.
+/// While rotating, the whole subtree takes its new size at once instead.
+private final class RotationLayoutView: UIView {
+    var rotating = false
+    override func layoutSubviews() {
+        guard rotating else { return super.layoutSubviews() }
+        UIView.performWithoutAnimation {
+            super.layoutSubviews()
+            for subview in subviews { subview.layoutIfNeeded() }
+        }
+    }
 }
 
 /// Explicit width-constrained measurement is essential for the embedded

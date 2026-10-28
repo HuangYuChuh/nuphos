@@ -66,20 +66,21 @@ fun RuntimeSetupSheet(store: RuntimeSetupStore, onDismiss: () -> Unit,
         }
     }
     LaunchedEffect(store.signInRuntime?.id, state.attempt?.attemptId, state.attempt?.state, state.attemptMismatch, selection.selectedId, selection.selected?.provider, selection.selected?.status, selection.selected?.kind) { code = ""; browserError = false }
-    ModalBottomSheet(sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), onDismissRequest = { code = ""; onDismiss() }, properties = ModalBottomSheetProperties(securePolicy = androidx.compose.ui.window.SecureFlagPolicy.SecureOn)) {
-        Column(Modifier.fillMaxWidth().verticalScroll(scroll).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    ModalBottomSheet(containerColor = MaterialTheme.colorScheme.background, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), onDismissRequest = { code = ""; onDismiss() }, properties = ModalBottomSheetProperties(securePolicy = androidx.compose.ui.window.SecureFlagPolicy.SecureOn)) {
+        Column(Modifier.fillMaxWidth().heightIn(max = 720.dp).fillMaxHeight()) {
+            RuntimePickerHeader(title = if (detail != null) "Runtime details" else if (managing) "Manage runtimes" else "Choose runtime", onClose = { code = ""; onDismiss() })
+            HorizontalDivider()
+        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(scroll).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (detail != null) {
                 RuntimeDetailPage(detail, quotas[detail.runtimeId], onBack = { detailId = null }, onSignIn = {
                     if (store.focusSignIn(detail.runtimeId)) { detailId = null; managing = true }
                 })
             } else {
-                Text(if (managing) "Manage runtimes" else "Choose a runtime", style = MaterialTheme.typography.headlineSmall)
-                if (!managing) Text("Choose a runtime for new agents. Existing agents keep their current runtime. Provider sign-in may still be required.",
+                if (!managing) Text("For new agents. Existing agents keep their current runtime.",
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (managing) TextButton(onClick = { code = ""; browserError = false; store.clearSignInFocus(); managing = false }) { Text("Back to runtimes") }
-                    else if (store.canAdminister) OutlinedButton(onClick = { code = ""; browserError = false; managing = true }) { Text("Manage runtimes") }
-                    TextButton(onClick = { code = ""; onDismiss() }) { Text("Done") }
+
                 }
                 state.error?.let {
                     Text(it, color = MaterialTheme.colorScheme.error)
@@ -91,11 +92,13 @@ fun RuntimeSetupSheet(store: RuntimeSetupStore, onDismiss: () -> Unit,
                 if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                 if (selection.reselectionRequired) Text("The selected runtime is unavailable. Select a saved active runtime before starting a new agent.")
                 if (!managing) {
-                    RuntimeChoiceList(selection.catalog, selection.selectedId, quotas,
+                    val ready = selection.catalog.filter { it.selectable && it.local?.online != false && quotas[it.id]?.needsSignIn != true }
+                    RuntimeChoiceList(ready, selection.selectedId, quotas,
                         enabled = !state.busy && state.catalogLoaded, devices = devices,
                         onDetail = { runtime -> detailId = runtime.id },
-                        onSelect = { runtime -> code = ""; store.select(runtime.id) })
-                    if (state.catalogLoaded && selection.catalog.isEmpty()) Text("No saved runtimes.")
+                        onSelect = { runtime -> code = ""; store.select(runtime.id); if (store.selection.selectedId == runtime.id && store.selection.valid) onDismiss() })
+                    if (state.catalogLoaded && ready.isEmpty()) Text("No available runtimes.")
+                    TextButton(onClick = { code = ""; browserError = false; managing = true }) { Text("Manage computers and runtimes") }
                     OutlinedButton(onClick = { store.refresh() }, enabled = !state.busy) { Text("Refresh runtimes") }
                 } else {
                     store.signInRuntime?.let { selected ->
@@ -154,6 +157,7 @@ fun RuntimeSetupSheet(store: RuntimeSetupStore, onDismiss: () -> Unit,
                 }
             }
             Spacer(Modifier.height(16.dp))
+        }
         }
     }
 }

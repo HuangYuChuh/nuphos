@@ -1,6 +1,7 @@
 import { getConversationPreviewAttachment } from '@/lib/agent/db'
 import { isShuttingDown } from '@/lib/lifecycle'
 import { errorTelemetryProperties, logError, logEvent } from '@/lib/observability'
+import { notifyLiveActivities } from '@/lib/push/live-activities'
 
 import { registry, sessionsByConversation } from './agent-chat-registry'
 import { observeAutonomousUpdates } from './autonomous-session-observer'
@@ -25,10 +26,17 @@ const sleep: Sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 export function observeSession(session: TeamSession): void {
   observeAutonomousUpdates(session)
   const transport = session.client
-  const release = holdRuntimeState(transport, session.teamId, session.openabSessionId)
+  const release = holdRuntimeState(
+    transport,
+    session.teamId,
+    session.openabSessionId,
+    session.conversationId,
+  )
   const onLost = () => {
     // The list falls back to dormant until the reattached transport reports.
     forgetRuntimeState(session.teamId, session.openabSessionId)
+    // The card says the runtime cannot be reached; its next report moves it on.
+    notifyLiveActivities(session.conversationId, { state: 'disconnected' })
     // A close after a retire finds the first attempt running; keep its outcome.
     if (!session.reattaching) session.reattached = reattachAfterTransportLoss(session, transport)
   }

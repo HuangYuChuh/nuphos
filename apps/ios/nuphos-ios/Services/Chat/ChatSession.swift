@@ -37,8 +37,6 @@ final class ChatSession {
     private(set) var stoppedByUser = false
     /// Stop was sent; the runtime has not yet closed the turn.
     private(set) var isStopping = false
-    /// When the current reply started — for "Worked for Xs".
-    private(set) var turnStartedAt: Date?
     /// New conversation: sent on the first POST. Existing: mirrors the
     /// server's bypass flag — change it with `setPermissionMode`.
     private(set) var permissionMode: PermissionMode = .auto
@@ -128,10 +126,6 @@ final class ChatSession {
     private func receiveRuntime(_ snapshot: JSONValue?, observedAt: TimeInterval) {
         observations.receive(snapshot, team: teamId, session: sessionId, observedAt: observedAt)
         showLiveActivity()
-        if isNativeRuntime, let observation = runtimeObservation, observation.fresh(at: observations.now),
-           let phase = observation.phase, ["idle", "dormant", "cancelled"].contains(phase) {
-            endLiveActivity(phase == "cancelled" ? .stopped : .done)
-        }
         if runtimeObservation?.executing(at: observations.now) == true { awaitingAdmission = false }
         // A message the turn could not take goes out once the agent accepts a new one.
         if isNativeRuntime, !queued.isEmpty, canSubmit, allows("send") {
@@ -144,27 +138,9 @@ final class ChatSession {
     private func showLiveActivity() {
         #if os(iOS)
         guard isStreaming else { return }
-        TurnLiveActivity.show(
-            sessionId: sessionId, teamId: teamId, title: title,
-            agent: agentRuntime ?? runtime?.provider.rawValue, runtime: runtimeDisplayName,
-            startedAt: turnStartedAt, authToken: token
-        )
+        TurnLiveActivity.show(sessionId: sessionId, teamId: teamId, title: title, authToken: token)
         #endif
     }
-    /// Only for a turn that certainly ended; the backend's push covers the rest.
-    private func endLiveActivity(_ phase: TurnActivityAttributes.Phase) {
-        #if os(iOS)
-        TurnLiveActivity.end(sessionId: sessionId, phase: phase)
-        #endif
-    }
-    /// The turn parked on an approval or a question rather than ending.
-    private var awaitsUser: Bool {
-        messages.last?.parts.contains {
-            if case .tool(let t) = $0 { return t.state == .approvalRequested || t.state == .inputAvailable }
-            return false
-        } == true
-    }
-
 
     /// Changes the mode; for a conversation the server knows, that is a
     /// `PUT /agent/auto-mode/bypass` (the mode on the first POST is final).
@@ -360,6 +336,9 @@ final class ChatSession {
                 if !readOnly, !transportStreaming { send(text) }
             }
         } catch {
+            // The view went away mid-load (a link or notification replaced
+            // it). That is not a failure: its next appearance loads again.
+            guard !Task.isCancelled else { return }
             loadError = error.localizedDescription
             loaded = true
         }
@@ -769,7 +748,6 @@ final class ChatSession {
         isStopping = false
         stoppedByUser = false
         error = nil
-        turnStartedAt = .now
         currentStreamId = options.streamId
         awaitingAdmission = isNativeRuntime && !options.explicitResume
         showLiveActivity()
@@ -785,12 +763,10 @@ final class ChatSession {
                     finishTurn(error: nil)
                     return
                 case .failed(let message):
-                    if !isNativeRuntime { endLiveActivity(.failed) }
                     finishTurn(error: message)
                     return
                 case .completed(let sawTurnComplete, let paused):
                     if stoppedByUser || paused?.reason == "stopped-by-user" {
-                        if !isNativeRuntime { endLiveActivity(.stopped) }
                         finishTurn(error: nil)
                         return
                     }
@@ -802,11 +778,9 @@ final class ChatSession {
                         continue
                     }
                     if !sawTurnComplete, let paused {
-                        if !isNativeRuntime { endLiveActivity(.failed) }
                         finishTurn(error: describeStall(paused))
                         return
                     }
-                    if !isNativeRuntime, sawTurnComplete, !awaitsUser { endLiveActivity(.done) }
                     finishTurn(error: nil)
                     return
                 }

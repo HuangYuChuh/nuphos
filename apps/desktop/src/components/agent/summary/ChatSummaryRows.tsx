@@ -3,6 +3,8 @@ import { ArrowUpRight, ExternalLink, Link2, MoreVertical } from 'lucide-react'
 
 import { copyLinkWithFeedback } from '../../../lib/copyLink'
 import { chatRowIndicator } from '../../../lib/runtimeExecution'
+import { ResourceMark } from '../../sidebar/ResourceMark'
+import { resourceStatus } from '../../sidebar/sessionResourcePresentation'
 import { resourceStyle } from '../../sidebar/sessionResourceStyle'
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '../../ui/menu'
 import { toast } from '../../ui/toast'
@@ -13,21 +15,34 @@ import { changeSubtitle, changeTitle } from './chatSummaryModel'
 import type { AgentConversation } from '../../../api/agent-types'
 import type { SessionResource } from '../../../api/session-resource-types'
 import type { RuntimeExecution } from '../../../lib/runtimeExecution'
-import type { ReactNode } from 'react'
+import type { ReactNode, Ref } from 'react'
 
 export const sectionClass = 'rounded-xl border border-zGray-800 px-3.5 py-3'
 const focusClass =
   'outline-none focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1 focus-visible:outline-current'
 const hoverRowClass =
   '-mx-1.5 rounded-md px-1.5 transition-colors hover:bg-zGray-800/50 motion-reduce:transition-none'
-const rowFocusClass =
-  'outline-none focus-visible:bg-zGray-800/50 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-zViolet-500/70'
 
-/** A titled block of rows. */
-export function SummarySection({ title, children }: { title: string; children: ReactNode }) {
+export const focusRingClass =
+  'outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-zViolet-500/70'
+const rowFocusClass = `focus-visible:bg-zGray-800/50 ${focusRingClass}`
+
+/** A titled block of rows; `header` sits under the title, above the rows. */
+export function SummarySection({
+  title,
+  header,
+  ref,
+  children,
+}: {
+  title: string
+  header?: ReactNode
+  ref?: Ref<HTMLElement>
+  children: ReactNode
+}) {
   return (
-    <section className={sectionClass} aria-label={title}>
+    <section ref={ref} className={sectionClass} aria-label={title}>
       <h3 className="text-[13px] font-medium text-main">{title}</h3>
+      {header}
       <div className="flex flex-col gap-0.5 pt-2">{children}</div>
     </section>
   )
@@ -111,7 +126,7 @@ export function ChangeRow({
       </span>
       <button
         type="button"
-        title={`${title} · ${resource.state}`}
+        title={`${title} · ${resourceStatus(resource)}`}
         onClick={(event) => onOpen(resource.url, event.metaKey)}
         className={clsx(
           'min-w-0 flex-1 rounded text-left',
@@ -120,8 +135,11 @@ export function ChangeRow({
         )}
       >
         <span className="block truncate text-[13px] leading-5 text-main">{title}</span>
-        <span className="block truncate text-[12px] leading-5 text-tertiary">
-          {changeSubtitle(resource)} · {capitalize(resource.state)}
+        <span className="flex min-w-0 items-center gap-1 text-[12px] leading-5 text-tertiary">
+          <span className="truncate">
+            {changeSubtitle(resource)} · {capitalize(resourceStatus(resource))}
+          </span>
+          <ResourceMark resource={resource} />
         </span>
       </button>
       <Menu>

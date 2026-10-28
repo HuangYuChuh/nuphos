@@ -11,8 +11,8 @@ struct ProfileSheet: View {
     @AppStorage(BotAvatars.enabledKey) private var botAvatars = true
 
     @State private var confirmSignOut = false
+    @State private var showAppIcons = false
     @State private var privacyError: String?
-    @State private var hasOpenAIKey = Keychain.read(Whisper.keychainKey) != nil
     @AppStorage(Whisper.promptKey) private var whisperPrompt = Whisper.defaultPrompt
 
     var body: some View {
@@ -42,15 +42,6 @@ struct ProfileSheet: View {
 
                 #if os(iOS)
                 Section {
-                    if hasOpenAIKey {
-                        Text("OpenAI API key saved on this device")
-                        Button("Remove OpenAI API key", role: .destructive) {
-                            Keychain.delete(Whisper.keychainKey)
-                            hasOpenAIKey = false
-                        }
-                    } else {
-                        Text("Tap the microphone in the composer to add your OpenAI API key.")
-                    }
                     TextField("Transcription prompt", text: $whisperPrompt, axis: .vertical)
                         .lineLimit(2...6)
                     if whisperPrompt != Whisper.defaultPrompt {
@@ -59,13 +50,16 @@ struct ProfileSheet: View {
                 } header: {
                     Text("Voice input")
                 } footer: {
-                    Text("The prompt sets the writing style and spells names Whisper doesn't know, such as products and services. Recordings are transcribed by OpenAI Whisper with your own key and billed to your OpenAI account.")
+                    Text("The prompt sets the writing style and spells names Whisper doesn't know, such as products and services. Voice input is included with a Nuphos subscription; recordings are transcribed by OpenAI Whisper.")
                 }
                 .listRowBackground(Theme.surface)
                 #endif
 
                 Section {
                     Toggle("Bot avatars", isOn: $botAvatars)
+                    #if os(iOS)
+                    NavigationLink("App icon") { AppIconPicker() }
+                    #endif
                 } header: {
                     Text("Appearance")
                 } footer: {
@@ -101,6 +95,12 @@ struct ProfileSheet: View {
             }
             .scrollContentBackground(.hidden)
             .background(Theme.canvas)
+            #if os(iOS)
+            .navigationDestination(isPresented: $showAppIcons) { AppIconPicker() }
+            #endif
+            #if DEBUG
+            .onAppear { if ProcessInfo.processInfo.arguments.contains("-show-app-icons") { showAppIcons = true } }
+            #endif
             .sheet(isPresented: $editing) { EditProfileSheet(user: currentUser) }
             .refreshable { await session.refreshUser() }
             .navigationTitle("Account")

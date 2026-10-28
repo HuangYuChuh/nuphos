@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto'
 
 import { config } from '@/config'
 import { appendAutonomousConversationTurn } from '@/lib/agent/db'
+import { withoutEmptyTurnSentinel } from '@/lib/claude-code-preview/empty-turn'
 import { handleOpenAbPermissionRequest } from '@/lib/claude-code-preview/openab-permission-bridge'
 import { createPreviewAssistantPartAccumulator } from '@/lib/claude-code-preview/preview-transcript'
 import { logError } from '@/lib/observability'
@@ -67,7 +68,7 @@ async function finishTurn(turn: AutonomousTurn): Promise<void> {
   // The transcript belongs to the conversation owner, not to whoever happened
   // to run the last interactive turn.
   const { conversationId, teamId, conversationOwnerUserId: userId, locale } = turn.context
-  const parts = turn.orderedParts.materialize(turn.toolSteps())
+  const parts = withoutEmptyTurnSentinel(turn.orderedParts.materialize(turn.toolSteps()))
 
   // Runtime termination ends the stream and its lease immediately. Database
   // persistence must not keep an idle runtime displayed as Thinking.
