@@ -6,6 +6,8 @@ import UIKit
 /// SwiftUI owns the message views; one collection-view controller owns layout
 /// and scroll intent. Geometry observations never issue scroll commands.
 struct TranscriptList: UIViewControllerRepresentable {
+    static let rule1 = CommandLine.arguments.contains("-hdr-rule1")
+    static let edges: Edge.Set = CommandLine.arguments.contains("-hdr-under") ? [.top, .bottom] : .bottom
     let rows: [ChatRow]
     let submittedRowID: String?
     let sessionID: String
@@ -46,6 +48,8 @@ final class TranscriptController: UIViewController, UICollectionViewDelegate, Ch
     private var applying = false
     private var pending: (() -> Void)?
     private var previousSize = CGSize.zero
+    private var touching = false
+    var trace = false
     private let composer = UIHostingController(rootView: AnyView(EmptyView()))
     let placeholder = UIHostingController(rootView: AnyView(EmptyView()))
     private lazy var composerHeight = composer.view.heightAnchor.constraint(equalToConstant: 0)
@@ -209,7 +213,8 @@ final class TranscriptController: UIViewController, UICollectionViewDelegate, Ch
         let size = collection.bounds.size
         guard size.width > 0, size.height > 0, size != previousSize else { return }
         previousSize = size
-        if !positioned || following {
+        if trace { UIEventLog.regression(name: "trace_resize", passed: true, detail: "size=\(size) following=\(following) touching=\(touching)") }
+        if !positioned || (following && !(TranscriptList.rule1 && touching)) {
             // Inside the keyboard's animation, so the rows travel with it.
             positionAtEnd()
         }
@@ -308,15 +313,23 @@ final class TranscriptController: UIViewController, UICollectionViewDelegate, Ch
     private func updateLatestButton() { latestButton.isHidden = nearBottom }
 
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        touching = true
         layout.keepContentOffsetAtBottomOnBatchUpdates = false
     }
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        if trace {
+            let stack = Thread.callStackSymbols.dropFirst(1).prefix(10).map { line in
+                line.split(separator: " ", omittingEmptySubsequences: true).dropFirst(3).first.map(String.init) ?? "?"
+            }.joined(separator: " < ")
+            UIEventLog.regression(name: "trace_scroll", passed: true, detail: "offset=\(scrollView.contentOffset.y) insetTop=\(scrollView.adjustedContentInset.top) h=\(scrollView.bounds.height) stack=\(stack)")
+        }
         UIEventLog.chatScroll(sessionId: sessionID, contentOffset: scrollView.contentOffset)
         updateLatestButton()
     }
 
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+        touching = false
         if !decelerate { settle() }
     }
 
@@ -595,6 +608,39 @@ final class TranscriptController: UIViewController, UICollectionViewDelegate, Ch
                 return false
             }.count
         }
+        // iOS 27 minimizes the navigation bar on scroll on iPhone Duo, so the
+        // header changes while a finger is still down. Nothing under the
+        // finger may move, and the reader must not be pulled to the end.
+        func rowY() -> CGFloat {
+            guard let path = collection.indexPathsForVisibleItems.max(),
+                  let cell = collection.cellForItem(at: path) else { return .nan }
+            return cell.convert(cell.bounds, to: nil).minY
+        }
+        for (name, hide) in [("header_hides_mid_drag", true), ("header_shows_mid_drag", false)] {
+            guard let navigation = navigationController else {
+                check(name, false, "no navigation controller")
+                continue
+            }
+            navigation.setNavigationBarHidden(!hide, animated: false)
+            fixture = fixture0
+            apply()
+            showLatest()
+            await pause()
+            // A finger goes down and moves the transcript 20 pt; it stays down.
+            scrollViewWillBeginDragging(collection)
+            collection.contentOffset.y -= 20
+            let away = distanceToEnd, before = rowY()
+            trace = true
+            navigation.setNavigationBarHidden(hide, animated: false)
+            await pause()
+            trace = false
+            let after = rowY()
+            check(name, abs(distanceToEnd - away) < 1 && abs(after - before) < 1,
+                  "distanceToEnd=\(away)->\(distanceToEnd) rowY=\(before)->\(after) insetTop=\(collection.adjustedContentInset.top) height=\(collection.bounds.height)")
+            scrollViewDidEndDragging(collection, willDecelerate: false)
+        }
+        navigationController?.setNavigationBarHidden(false, animated: false)
+        await pause()
         for (name, orientation) in [("rotate_landscape", UIInterfaceOrientationMask.landscapeRight), ("rotate_portrait", .portrait)] {
             let width = collection.bounds.width
             var worst = 0
@@ -747,7 +793,19 @@ private final class TranscriptFrameProbe: NSObject {
     func stop() { link?.invalidate(); link = nil }
 }
 
-struct TranscriptRegressionScreen: UIViewControllerRepresentable {
+/// Hosted like the chat page: in a navigation stack, under its header.
+struct TranscriptRegressionScreen: View {
+    var body: some View {
+        NavigationStack {
+            TranscriptRegressionController()
+                .ignoresSafeArea(.all, edges: TranscriptList.edges)
+                .navigationTitle("Scroll regression")
+                .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+}
+
+private struct TranscriptRegressionController: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> TranscriptController {
         let controller = TranscriptController()
         Task { @MainActor [weak controller] in

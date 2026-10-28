@@ -311,7 +311,7 @@ struct ConversationView: View {
                 .padding(.bottom, rowSpacing(row))
                 .readableWidth())
         }
-        .ignoresSafeArea(.all, edges: .bottom)
+        .ignoresSafeArea(.all, edges: TranscriptList.edges)
         #else
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
