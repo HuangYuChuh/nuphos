@@ -1,0 +1,74 @@
+name: museagent
+
+services:
+  mongo:
+    extends:
+      file: ../compose/docker-compose.yml
+      service: mongo
+    cpus: 2
+    mem_limit: 2g
+    pids_limit: 256
+
+  rustfs:
+    extends:
+      file: ../compose/docker-compose.yml
+      service: rustfs
+    command: ['exec /bin/sh /opt/museagent/storage-init.sh']
+    volumes:
+      - ./storage-init.sh:/opt/museagent/storage-init.sh:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'test -f /data/.buckets-ready && curl -fsS http://127.0.0.1:9000/health']
+    cpus: 2
+    mem_limit: 2g
+    pids_limit: 256
+
+  backend:
+    extends:
+      file: ../compose/docker-compose.yml
+      service: backend
+    image: museagent-backend:pi
+    build:
+      context: ../..
+      dockerfile: apps/backend/Dockerfile
+    cpus: 4
+    mem_limit: 4g
+    pids_limit: 512
+
+  runtime:
+    extends:
+      file: ../compose/docker-compose.yml
+      service: runtime
+    image: museagent-runtime:pi
+    build:
+      context: ../..
+      dockerfile: deploy/museagent/runtime.Dockerfile
+    environment:
+      NUPHOS_PI_CONFIG_DIR: /run/pi-config
+      NUPHOS_RUNTIME_PREINSTALL: ''
+      OPENAB_RUNTIME_LABEL: MuseAgent Pi
+    volumes:
+      - ../../.work/pi-home/.pi/agent:/run/pi-config:ro
+    cpus: 4
+    mem_limit: 6g
+    pids_limit: 512
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+
+networks:
+  # 服务器的 Docker 地址池已分配完，必须为每个网络指定地址段。
+  default:
+    ipam:
+      config:
+        - subnet: 172.16.0.0/24
+  data:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.16.1.0/24
+
+volumes:
+  mongo-data:
+  mongo-config:
+  rustfs-data:
+  runtime-home:
+  runtime-workspace:

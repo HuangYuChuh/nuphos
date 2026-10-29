@@ -14,6 +14,9 @@ dist
 build
 *.tsbuildinfo
 
+# 本地开发和验证数据
+.work/
+
 # Logs
 logs
 *.log
