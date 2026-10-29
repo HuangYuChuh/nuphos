@@ -37,6 +37,12 @@ Three things, in layers:
    Amazon Bedrock takes a Bedrock API key or AWS access keys plus a region,
    which the sign-in keeps in OpenCode's own config rather than in environment
    variables every shell command would inherit.
+   Pi (`pi-acp`, over `@earendil-works/pi-coding-agent`) speaks ACP through that
+   adapter and takes no sign-in flow: it reads its model providers, API keys and
+   OAuth logins from its own agent directory (`~/.pi/agent`). The shim gives each
+   conversation a private copy of that directory, so `models.json` and
+   `auth.json` an operator places in `/home/node/.pi/agent` — or names with
+   `NUPHOS_PI_CONFIG_DIR` — reach every session without being written to.
 3. **The Nuphos toolset layer**, built from [`image/`](image) in this
    repository: a set of patches to the adapters, a handful of helper programs,
    and the command-line tools an agent is expected to be able to reach for.
@@ -160,7 +166,7 @@ docker build -f image/Dockerfile \
   -t nuphos-runtime-codex:local image
 ```
 
-For the other runtimes use `RUNTIME_PROVIDER=claude-code`, `grok`, `antigravity` or `opencode`. Any image with
+For the other runtimes use `RUNTIME_PROVIDER=claude-code`, `grok`, `antigravity`, `opencode` or `pi`. Any image with
 the binary at `/usr/local/bin/openab` works as `BASE_IMAGE`, including a
 published `X.Y.Z-base-<provider>` tag.
 
@@ -277,13 +283,14 @@ container's limits. The agent command itself is not pinned there: it stays on
 Each runtime owns its own login. Nuphos never stores the account and never sends
 one to a runtime it did not provision; it only shows what the runtime reports.
 
-| Variant       | Sign in on the host                                                                   | Credential                                          |
-| ------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| `claude-code` | `docker exec -it nuphos-runtime claude auth login` (or run `claude` and use `/login`) | `/home/node/.claude/.credentials.json`              |
-| `codex`       | `docker exec -it nuphos-runtime codex login --device-auth`                            | `/home/node/.codex/auth.json`                       |
-| `grok`        | `docker exec -it nuphos-runtime grok login --device-auth`                             | `/home/node/.grok/auth.json`                        |
-| `antigravity` | Sign in from the app (below)                                                          | `/home/node/.gemini/antigravity-acp/acp_token.json` |
-| `opencode`    | `docker exec -it nuphos-runtime opencode providers login`                             | `/home/node/.local/share/opencode/auth.json`        |
+| Variant       | Sign in on the host                                                                                                         | Credential                                          |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `claude-code` | `docker exec -it nuphos-runtime claude auth login` (or run `claude` and use `/login`)                                       | `/home/node/.claude/.credentials.json`              |
+| `codex`       | `docker exec -it nuphos-runtime codex login --device-auth`                                                                  | `/home/node/.codex/auth.json`                       |
+| `grok`        | `docker exec -it nuphos-runtime grok login --device-auth`                                                                   | `/home/node/.grok/auth.json`                        |
+| `antigravity` | Sign in from the app (below)                                                                                                | `/home/node/.gemini/antigravity-acp/acp_token.json` |
+| `opencode`    | `docker exec -it nuphos-runtime opencode providers login`                                                                   | `/home/node/.local/share/opencode/auth.json`        |
+| `pi`          | Write `models.json` and `auth.json` into `/home/node/.pi/agent` (or set `NUPHOS_PI_CONFIG_DIR` to a directory holding them) | `/home/node/.pi/agent/auth.json`                    |
 
 You can also sign in from the app once the runtime is connected (see below). Either
 way the credential is written inside the container, so mount the `/home/node` volume
@@ -483,6 +490,7 @@ Each release publishes four tags per provider:
 | Runtime             | `X.Y.Z-grok`             | `commit-<runtime-sha>-grok`        |
 | Runtime             | `X.Y.Z-antigravity`      | `commit-<runtime-sha>-antigravity` |
 | Runtime             | `X.Y.Z-opencode`         | `commit-<runtime-sha>-opencode`    |
+| Runtime             | `X.Y.Z-pi`               | `commit-<runtime-sha>-pi`          |
 | Base (gateway only) | `X.Y.Z-base-claude-code` | `<openab-tree12>-base-claude-code` |
 | Base (gateway only) | `X.Y.Z-base-codex`       | `<openab-tree12>-base-codex`       |
 

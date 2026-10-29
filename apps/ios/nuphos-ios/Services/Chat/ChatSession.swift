@@ -48,7 +48,7 @@ final class ChatSession {
     /// New conversation: the runtime it starts on (nil lets the team default
     /// decide). Sent on the first PUT/POST only.
     var runtime: RuntimeInstance?
-    /// Existing conversation: `nuphos` | `claude-code` | `codex` | `grok` | `antigravity` | `opencode`.
+    /// Existing conversation: `nuphos` | `claude-code` | `codex` | `grok` | `antigravity` | `opencode` | `pi`.
     private(set) var agentRuntime: String?
     private(set) var runtimeId: String?
     private(set) var runtimeLabel: String?

@@ -56,6 +56,7 @@ fun RuntimeMark(runtime: String?, size: Dp = 12.dp, loader: ImageLoader = agentI
         "claude-code" -> "claude"
         "grok" -> "grok"
         "opencode" -> "opencode"
+        "pi" -> "pi"
         "antigravity" -> "antigravity"
         else -> null
     }

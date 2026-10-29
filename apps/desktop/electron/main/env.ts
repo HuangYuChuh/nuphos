@@ -8,4 +8,4 @@ export const isDev = Boolean(process.env.VITE_DEV_SERVER_URL)
 const rawDevSuffix = process.env.ATLAS_DEV_SUFFIX?.replace(/[/\\]/g, '-') ?? ''
 
 export const devSuffix = rawDevSuffix ? ` (${rawDevSuffix})` : ''
-export const APP_NAME = isDev ? `Nuphos Dev${devSuffix}` : 'Nuphos'
+export const APP_NAME = isDev ? `MuseAgent Dev${devSuffix}` : 'MuseAgent'

@@ -1,0 +1,10 @@
+[agent]
+# Where the operator's Pi model configuration is mounted; openab env_clear()s the
+# agent, so the shim can only see it through inherit_env.
+inherit_env = ["NUPHOS_PI_CONFIG_DIR"]
+# openab ignores the cwd a client sends and spawns the agent here, defaulting to
+# $HOME. Skills and the agent's files live under /workspace, as on a provisioned pod.
+working_dir = "/workspace"
+
+[agent.env]
+BASH_ENV = "/opt/nuphos-runtime/runtime-guard.sh"

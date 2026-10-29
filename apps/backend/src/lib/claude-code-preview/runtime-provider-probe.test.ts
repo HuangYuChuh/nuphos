@@ -123,6 +123,7 @@ describe('probeExternalRuntimeProvider', () => {
     ['grok@1.0.46', 'grok'],
     ['antigravity-acp@1.3.0', 'antigravity'],
     ['opencode@1.18.35', 'opencode'],
+    ['pi-acp@0.0.34', 'pi'],
   ] as const)
     test(`recognizes the ${provider} stamp the image sets`, async () => {
       const h = harness()

@@ -22,6 +22,7 @@ test('release notes read the tagged runtime subtree and exclude unrelated monore
   try {
     mkdirSync(join(cwd, 'image/claude-agent-acp'), { recursive: true })
     mkdirSync(join(cwd, 'image/codex-acp'), { recursive: true })
+    mkdirSync(join(cwd, 'image/pi-acp'), { recursive: true })
     mkdirSync(join(cwd, 'image/tools'), { recursive: true })
     writeFileSync(
       join(cwd, 'image/tools/manifest.json'),
@@ -48,6 +49,12 @@ test('release notes read the tagged runtime subtree and exclude unrelated monore
         dependencies: { '@openai/codex': '0.159.3', '@agentclientprotocol/codex-acp': '1.1.4' },
       }),
     )
+    writeFileSync(
+      join(cwd, 'image/pi-acp/package.json'),
+      JSON.stringify({
+        dependencies: { '@earendil-works/pi-coding-agent': '1.4.0', 'pi-acp': '0.0.34' },
+      }),
+    )
     commit('runtime baseline')
     git('tag', 'runtime-v0.1.0')
     writeFileSync(join(root, 'desktop.txt'), 'unrelated')
@@ -70,6 +77,9 @@ test('release notes read the tagged runtime subtree and exclude unrelated monore
     assert.match(notes, /ghcr\.io\/nuphos\/runtime:0\.1\.1-grok/)
     assert.match(notes, /ghcr\.io\/nuphos\/runtime:0\.1\.1-antigravity/)
     assert.match(notes, /ghcr\.io\/nuphos\/runtime:0\.1\.1-opencode/)
+    assert.match(notes, /ghcr\.io\/nuphos\/runtime:0\.1\.1-pi/)
+    assert.match(notes, /\| Pi \| 1\.4\.0 \|/)
+    assert.match(notes, /\| Pi ACP adapter \| 0\.0\.34 \|/)
     assert.match(notes, /\| OpenCode \| 1\.18\.35 \|/)
     assert.match(notes, /\| Grok Build CLI \| 1\.0\.46 \|/)
     assert.match(notes, /nuphos\/nuphos\/compare\/runtime-v0\.1\.0\.\.\.runtime-v0\.1\.1/)

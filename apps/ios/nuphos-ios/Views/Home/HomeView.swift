@@ -233,7 +233,7 @@ private struct PlansFilterMenu: View {
 /// that Xcode rendered each SVG.
 private struct LogoPreviewGrid: View {
     private var names: [String] {
-        CredentialCatalog.providers.map(\.logo) + ["logo-claude", "logo-openai", "logo-grok", "logo-antigravity", "logo-opencode"]
+        CredentialCatalog.providers.map(\.logo) + ["logo-claude", "logo-openai", "logo-grok", "logo-antigravity", "logo-opencode", "logo-pi"]
     }
 
     var body: some View {

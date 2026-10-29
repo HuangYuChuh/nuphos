@@ -97,7 +97,7 @@ test('each provider follows the newest release that published it', async () => {
   const originalFetch = globalThis.fetch
   const image = (version: string, provider: string) =>
     `ghcr.io/nuphos/runtime:${version}-${provider}`
-  const all = ['claude-code', 'codex', 'grok', 'antigravity', 'opencode']
+  const all = ['claude-code', 'codex', 'grok', 'antigravity', 'opencode', 'pi']
 
   globalThis.fetch = (async (_url: FetchInput) =>
     Response.json([
@@ -114,6 +114,7 @@ test('each provider follows the newest release that published it', async () => {
     expect((await latestRuntimeRelease('grok'))?.version).toBe('0.2.0')
     expect((await latestRuntimeRelease('antigravity'))?.version).toBe('0.2.0')
     expect((await latestRuntimeRelease('opencode'))?.version).toBe('0.2.0')
+    expect((await latestRuntimeRelease('pi'))?.version).toBe('0.2.0')
   } finally {
     globalThis.fetch = originalFetch
     resetRuntimeReleaseCache()

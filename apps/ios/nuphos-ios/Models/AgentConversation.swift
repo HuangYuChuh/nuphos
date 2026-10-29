@@ -49,7 +49,7 @@ struct AgentConversation: Codable, Identifiable, Equatable, Hashable, Sendable {
     let canManage: Bool
     let tokenUsage: TokenUsage?
     let activitySource: ActivitySource?
-    /// `nuphos` | `claude-code` | `codex` | `grok` | `antigravity` | `opencode`.
+    /// `nuphos` | `claude-code` | `codex` | `grok` | `antigravity` | `opencode` | `pi`.
     let agentRuntime: String?
     let runtimeId: String?
     let runtimeLabel: String?

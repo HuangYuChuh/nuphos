@@ -9,6 +9,7 @@ const HOST_SIGN_IN: Partial<Record<RuntimeInstance['provider'], string>> = {
   codex: 'docker exec -it <container> codex login --device-auth',
   grok: 'docker exec -it <container> grok login --device-auth',
   opencode: 'docker exec -it <container> opencode providers login',
+  pi: 'Write models.json and auth.json into /home/node/.pi/agent',
 }
 
 /** The agent owns its login; this only shows what the agent reports. */

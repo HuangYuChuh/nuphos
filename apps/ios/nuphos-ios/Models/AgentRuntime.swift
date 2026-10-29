@@ -4,7 +4,7 @@ import Foundation
 /// (`GET /teams/:id/agent-runtimes`): a Cloud runtime, or one of the
 /// signed-in user's own computers (`kind == "local"`).
 struct RuntimeInstance: Codable, Identifiable, Equatable, Hashable, Sendable {
-    enum Provider: String, Codable, Sendable { case claudeCode = "claude-code", codex, grok, antigravity, opencode }
+    enum Provider: String, Codable, Sendable { case claudeCode = "claude-code", codex, grok, antigravity, opencode, pi }
     enum Status: String, Codable, Sendable { case active, disabled }
 
     struct Local: Codable, Equatable, Hashable, Sendable {
@@ -79,6 +79,7 @@ extension RuntimeInstance.Provider {
         case "grok": "logo-grok"
         case "antigravity": "logo-antigravity"
         case "opencode": "logo-opencode"
+        case "pi": "logo-pi"
         default: "logo-claude"
         }
     }
@@ -90,6 +91,7 @@ extension RuntimeInstance.Provider {
         case "grok": "Grok Build"
         case "antigravity": "Antigravity"
         case "opencode": "OpenCode"
+        case "pi": "Pi"
         case "nuphos": "Nuphos"
         default: raw?.capitalized ?? "Runtime"
         }

@@ -45,6 +45,7 @@ struct AgentSetupView: View {
 
     private static let providers: [(RuntimeInstance.Provider, vendor: String)] = [
         (.claudeCode, "Anthropic"), (.codex, "OpenAI"), (.grok, "xAI"), (.antigravity, "Google"), (.opencode, "OpenCode"),
+        (.pi, "Pi"),
     ]
 
     private var connected: Bool { login?.state == "connected" }
@@ -322,9 +323,9 @@ struct AgentSetupView: View {
         }
     }
 
-    /// Whose account the sign-in uses; OpenCode signs in to whichever model provider you pick.
+    /// Whose account the sign-in uses; OpenCode and Pi sign in to whichever model provider you pick.
     private func account(_ provider: RuntimeInstance.Provider) -> String {
-        provider == .opencode ? "model provider" : vendor(provider)
+        provider == .opencode || provider == .pi ? "model provider" : vendor(provider)
     }
 
     private func vendor(_ provider: RuntimeInstance.Provider) -> String {
