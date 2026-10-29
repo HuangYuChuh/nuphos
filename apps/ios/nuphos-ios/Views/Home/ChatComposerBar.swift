@@ -253,10 +253,15 @@ struct ChatComposerBar<Controls: View>: View {
             }
             #if canImport(UIKit)
             .onReceive(NotificationCenter.default.publisher(for: UITextView.textDidBeginEditingNotification)) { note in
-                guard allowsAttachments, let textView = note.object as? UITextView else { return }
+                guard let textView = note.object as? UITextView else { return }
                 // Focus lands a moment later; it tells this field from others.
+                // Checked once, a slow focus update left the field without the
+                // handler, so an image paste did nothing.
                 Task { @MainActor in
-                    if focused, textView.isFirstResponder { pasteHandler.attach(to: textView) { paste($0) } }
+                    for _ in 0..<10 {
+                        if focused, textView.isFirstResponder { pasteHandler.attach(to: textView) { paste($0) }; return }
+                        try? await Task.sleep(for: .milliseconds(50))
+                    }
                 }
             }
             #endif
@@ -449,6 +454,8 @@ struct ChatComposerBar<Controls: View>: View {
                        _ = provider.loadTransferable(type: String.self) { continuation.resume(returning: try? $0.get()) }
                    }) {
                     text += string
+                } else if !allowsAttachments {
+                    attachmentError = "Send attachments after this turn; it takes text now."
                 } else if let attachment = await ComposerAttachment.load(pasted: provider) {
                     attachments.append(attachment)
                 } else {
