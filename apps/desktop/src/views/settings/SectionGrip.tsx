@@ -3,6 +3,7 @@ import { forwardRef, useRef, useState } from 'react'
 
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from '../../components/ui/menu'
 import { ShortcutHint } from '../../components/ui/shortcut-hint'
+import { t } from '../../i18n'
 
 import { gripClickOpens, gripKeyStep, gripMenuAcceptsOpen } from './sectionOrderPresentation'
 
@@ -50,9 +51,9 @@ export const SectionGrip = forwardRef<
     >
       <MenuTrigger
         ref={ref}
-        aria-label={`Move ${label}`}
+        aria-label={t('Move {name}', { name: label })}
         aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
-        title="Drag to move, click for options"
+        title={t('Drag to move, click for options')}
         draggable
         onPointerDown={() => {
           openAtPress.current = open
@@ -76,18 +77,18 @@ export const SectionGrip = forwardRef<
           hint={<ShortcutHint combo="alt+up" className="pl-4" />}
           onClick={() => onMove(-1)}
         >
-          Move up
+          {t('Move up')}
         </MenuItem>
         <MenuItem
           disabled={!canMoveDown}
           hint={<ShortcutHint combo="alt+down" className="pl-4" />}
           onClick={() => onMove(1)}
         >
-          Move down
+          {t('Move down')}
         </MenuItem>
         <MenuSeparator />
         <MenuItem disabled={!canReset} onClick={onReset}>
-          Reset order
+          {t('Reset order')}
         </MenuItem>
       </MenuContent>
     </Menu>

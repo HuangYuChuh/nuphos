@@ -1,4 +1,5 @@
 import { toast } from '../../components/ui/toast'
+import { t } from '../../i18n'
 
 import type { PersonalCredentialDeepLinkPayload, PersonalCredentialProvider } from '../../types'
 
@@ -18,14 +19,14 @@ export function announcePersonalCredential({
   const name = nameOf(provider)
 
   if (login) {
-    toast.success(`Connected ${name} as ${login}`)
+    toast.success(t('Connected {name} as {login}', { name, login }))
   } else if (error === 'oauth_not_ready') {
     toast.error(
-      `Couldn’t connect ${name}`,
-      'This link expired or was started from another account.',
+      t('Couldn’t connect {name}', { name }),
+      t('This link expired or was started from another account.'),
     )
   } else {
-    toast.error(`Couldn’t connect ${name}`, 'Please try again.')
+    toast.error(t('Couldn’t connect {name}', { name }), t('Please try again.'))
   }
   window.dispatchEvent(new Event(PERSONAL_CREDENTIALS_CHANGED))
 }
