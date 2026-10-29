@@ -114,7 +114,16 @@ final class ChatSession {
     var canSteer: Bool { !readOnly && isNativeRuntime && allows("steer") && !allows("reply") && !steeringPending }
     var canReply: Bool { !readOnly && (!isNativeRuntime || allows("reply")) }
     var canCancel: Bool { !readOnly && !isStopping && (isNativeRuntime ? allows("cancel") : transportStreaming) }
-    var canSubmit: Bool { loaded && loadError == nil && !readOnly && failedSubmission == nil && !submitting && !awaitingAdmission && !steeringPending && (!isNativeRuntime || isNew || allows("send") || canReply || canSteer) }
+    var canSubmit: Bool { loaded && loadError == nil && !readOnly && failedSubmission == nil && !submitting && !awaitingAdmission && !steeringPending && (!isNativeRuntime || isNew || allows("send") || canReply || canSteer || runtimeMayAcceptLater) }
+    /// A message the agent cannot take now still goes: it waits in the
+    /// session queue, as on Desktop.
+    private var runtimeMayAcceptLater: Bool { runtimeObservation?.mayAcceptLater ?? true }
+    /// A send now waits in the session queue rather than starting a turn.
+    var sendQueues: Bool { isNativeRuntime && !isNew && !allows("send") && !canReply && !canSteer && runtimeMayAcceptLater }
+    /// This person's messages waiting in the session queue, in the order they run.
+    private(set) var serverQueued: [AgentChatAPI.QueuedMessage] = []
+    /// Queued messages being steered into the running turn.
+    private(set) var steeringQueued: Set<String> = []
     private func allows(_ action: String) -> Bool { runtimeObservation?.allows(action, at: observations.now) == true }
     private func receiveRuntime(_ snapshot: JSONValue?, observedAt: TimeInterval) {
         observations.receive(snapshot, team: teamId, session: sessionId, observedAt: observedAt)
@@ -289,6 +298,7 @@ final class ChatSession {
             if let t = detail.title, !t.isEmpty { title = t }
             adoptRuntime(from: detail)
             receiveRuntime(detail.runtimeState, observedAt: observedAt)
+            Task { await refreshQueue() }
             if let stored = detail.credentialAccess {
                 let selection = CredentialSelection(json: stored)
                 credentialAccess = selection.isBlank ? nil : selection
@@ -398,6 +408,61 @@ final class ChatSession {
         guard let pending else { return }
         failedSubmission = pending.submission
         messages.removeAll { $0.id == pending.id }
+    }
+
+    private func showQueued(_ item: AgentChatAPI.QueuedMessage) {
+        serverQueued.removeAll { $0.id == item.id }
+        serverQueued.append(item)
+        Analytics.shared.track("agent_message_queued", teamID: teamId)
+        Task { await refreshQueue() }
+    }
+
+    /// Reads the session queue: drops what the server ran or another device
+    /// took back, and shows what still waits after a relaunch.
+    func refreshQueue() async {
+        guard isNativeRuntime, !isNew,
+              let items = try? await AgentChatAPI.queue(token: token, teamId: teamId, sessionId: sessionId) else { return }
+        let mine = items.filter(\.mine)
+        if mine != serverQueued { serverQueued = mine }
+    }
+
+    /// Takes a waiting message back off the queue. Its turn may already have
+    /// started (404); anything else leaves it waiting.
+    @discardableResult
+    func unqueue(_ id: String) async -> Bool {
+        guard let index = serverQueued.firstIndex(where: { $0.id == id }) else { return false }
+        let item = serverQueued.remove(at: index)
+        do {
+            try await AgentChatAPI.unqueue(token: token, teamId: teamId, sessionId: sessionId, messageId: id)
+            return true
+        } catch AgentChatAPI.Conflict.other(_, _, let status) where status == 404 {
+            return false
+        } catch {
+            serverQueued.insert(item, at: min(index, serverQueued.count))
+            self.error = "Couldn't take the message back. \(error.localizedDescription)"
+            return false
+        }
+    }
+
+    /// Sends a waiting message into the running turn; the server takes it off the queue.
+    func steerQueued(_ id: String) async {
+        guard canSteer, let item = serverQueued.first(where: { $0.id == id }), !steeringQueued.contains(id) else { return }
+        steeringQueued.insert(id)
+        defer { steeringQueued.remove(id) }
+        let streamId = currentStreamId
+        let assistantId = messages.last?.id
+        do {
+            let messageId = try await AgentChatAPI.steer(token: token, teamId: teamId, sessionId: sessionId, text: item.text, queuedId: id)
+            serverQueued.removeAll { $0.id == id }
+            Analytics.shared.track("agent_message_sent", teamID: teamId, properties: ["mode": "steer"])
+            if currentStreamId == streamId, messages.last?.id == assistantId {
+                appendSteering(id: messageId, text: item.text)
+                lastSubmittedRowID = "steering.\(messageId)"
+            }
+        } catch {
+            self.error = error.localizedDescription
+            await refreshQueue()
+        }
     }
 
     func removeQueued(at index: Int) {
@@ -550,7 +615,7 @@ final class ChatSession {
     }
 
     private func dispatch(_ text: String) async {
-        await dispatch(.user(text), title: text)
+        await dispatch(.user(text), title: text, submission: ComposerSubmission(text: text, attachments: []))
     }
 
     /// Who is signed in, shown on what they send until the server's own
@@ -770,6 +835,11 @@ final class ChatSession {
                     // No reply comes on this stream; the queued turn's own does.
                     if let i = streamAssistantIndex, messages.indices.contains(i) { messages.remove(at: i) }
                     streamAssistantIndex = nil
+                    // The message leaves the transcript for the queue strip until its turn runs.
+                    if let pending = options.submission {
+                        messages.removeAll { $0.id == pending.id }
+                        showQueued(.init(id: pending.id, mine: true, text: pending.submission.text))
+                    }
                     finishTurn(error: nil)
                     return
                 case .failed(let message):
@@ -820,7 +890,10 @@ final class ChatSession {
 
         Task {
             if message == nil || wasStopped { await reloadFromServer() }
-            if isNativeRuntime { await refreshSessionConfig() }
+            if isNativeRuntime {
+                await refreshSessionConfig()
+                await refreshQueue()
+            }
             if !isNativeRuntime, message == nil, !wasStopped, !queued.isEmpty {
                 let next = queued.removeFirst()
                 await dispatch(next)
@@ -896,6 +969,8 @@ final class ChatSession {
             guard !Task.isCancelled else { return }
             receiveRuntime(detail.runtimeState, observedAt: observedAt)
             adoptRuntime(from: detail)
+            // A waiting message leaves the strip once its turn starts.
+            if !serverQueued.isEmpty { await refreshQueue() }
             if !pendingModelSettings.isEmpty { await refreshSessionConfig() }
             guard !submitting, attachedStreamId == attached else { continue }
             let follow = RuntimeTranscript.runToFollow(active: detail.activeRun?.streamId, attached: attached, stopped: lastStoppedStreamId)
