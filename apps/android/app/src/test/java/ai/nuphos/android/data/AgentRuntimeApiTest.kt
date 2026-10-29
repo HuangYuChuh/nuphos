@@ -29,6 +29,13 @@ class AgentRuntimeApiTest {
         response = """{"runtimes":[{"id":"local","provider":"codex","label":"Computer agent","status":"active","kind":"local","local":{"deviceId":"host","deviceLabel":"Laptop","online":false,"signedIn":true}}]}"""
         assertEquals(RuntimeHost("host", "Laptop", false), api.catalog().single().local)
     }
+    @Test fun localRuntimeRetainsItsOwnNameSeparatelyFromComputerLabel() = runTest {
+        response = """{"runtimes":[{"id":"local","provider":"codex","label":"Codex in Laptop","status":"active","kind":"local","local":{"deviceId":"host","deviceLabel":"Laptop","agentLabel":"Build helper","online":true}}]}"""
+        val runtime = api.catalog().single()
+        assertEquals("Laptop", runtime.local?.deviceLabel)
+        assertEquals("Build helper", runtime.local?.agentLabel)
+        assertEquals("Codex in Laptop", runtime.label)
+    }
     @Test fun managementUsesExactPatchAndBothDeletionReceipts() = runTest {
         response = runtime
         api.update("saved-id", label = " Renamed ")

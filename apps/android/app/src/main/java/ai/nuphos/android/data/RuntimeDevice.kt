@@ -2,7 +2,7 @@ package ai.nuphos.android.data
 
 import kotlinx.serialization.json.*
 
-data class RuntimeHost(val deviceId: String?, val deviceLabel: String?, val online: Boolean?)
+data class RuntimeHost(val deviceId: String?, val deviceLabel: String?, val online: Boolean?, val agentLabel: String? = null)
 data class RuntimeDevice(val id: String, val label: String, val online: Boolean, val box: Boolean,
     val metricsStatus: String, val cpuPercent: Double?, val memory: Capacity?, val disk: Capacity?) {
     data class Capacity(val used: Double, val total: Double) {

@@ -6,6 +6,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -45,9 +46,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import ai.nuphos.android.ui.components.AgentAvatar
 import ai.nuphos.android.ui.components.RuntimeMark
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -56,6 +55,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
@@ -84,7 +84,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AgentPage(
     searching: Boolean,
@@ -158,9 +158,23 @@ fun AgentPage(
         if (expiry != null) { delay(((expiry - now) * 1000).toLong() + 1); statusClock = RuntimeObservation.now() }
     }
     val pins = store.pinnedShortcuts
-    var foldedIds by rememberSaveable(account, team?.id) { mutableStateOf(emptyList<String>()) }
-    val tree = remember(store.conversations, pins, foldedIds, account) {
-        PinnedHistory.nest(store.conversations, pins, foldedIds.toSet(), account)
+    var foldedIds by rememberSaveable(account, team?.id) { mutableStateOf(store.foldedThreadIds(account, team?.id).toList()) }
+    val missingPins = pins.any { pin -> store.conversations.none { it.sessionId == pin.sessionId } }
+    val resolvingPins = store.search.isEmpty() && !store.archivedOnly && team != null &&
+        ((store.favorites == null && store.favoritesError == null) ||
+            (missingPins && (store.favoritesLoading || store.loadingPinnedHistory || store.isLoadingMore || store.isRefreshing)))
+    // A new first page can temporarily omit an already displayed pin. Keep the
+    // last complete snapshot until hydration settles instead of painting a shortcut.
+    // Scope keys prevent displaying another workspace/account/query's old rows.
+    var settledRows by remember(store, account, team?.id, revision, store.search, store.scope, store.sort, store.archivedOnly) {
+        mutableStateOf<List<AgentConversation>?>(null)
+    }
+    SideEffect {
+        if (store.phase == AgentStore.Phase.Loaded && !resolvingPins) settledRows = store.conversations
+    }
+    val displayedRows = if (resolvingPins) settledRows.orEmpty() else store.conversations
+    val tree = remember(displayedRows, pins, foldedIds, account) {
+        PinnedHistory.nest(displayedRows, pins, foldedIds.toSet(), account)
     }
     val historyItems = remember(tree, pins) { PinnedHistory.items(tree, pins) }
     LaunchedEffect(tree.rows.map { Triple(it.conversation.sessionId, it.depth, it.section) }) { rowInteractions.dismiss() }
@@ -188,7 +202,6 @@ fun AgentPage(
             )
         }
         if (store.search.isEmpty() && !store.archivedOnly) {
-            if (store.favoritesLoading) Text("Loading pinned agents…", Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.bodySmall)
             store.favoritesError?.let {
                 Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("Could not refresh pinned agents.", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
@@ -208,10 +221,14 @@ fun AgentPage(
             modifier = Modifier.weight(1f).fillMaxWidth().testTag("chat-history-refresh"),
         ) {
             when {
-                store.phase == AgentStore.Phase.Loading || store.phase == AgentStore.Phase.Idle -> {
+                store.phase == AgentStore.Phase.Loading || store.phase == AgentStore.Phase.Idle ||
+                    (store.phase == AgentStore.Phase.Loaded && resolvingPins && settledRows.isNullOrEmpty()) ||
+                    (store.phase == AgentStore.Phase.Loaded && store.conversations.isEmpty() && pins.isEmpty() &&
+                        store.selectedTeam != null && store.search.isEmpty() && !store.archivedOnly &&
+                        store.favorites == null && store.favoritesError == null) -> {
                     RefreshableHistoryState {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            LoadingIndicator()
+                            CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
                             Text("Loading agents…", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 12.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
@@ -222,10 +239,12 @@ fun AgentPage(
                         title = "Couldn't load agents",
                         body = store.phaseError.orEmpty(),
                         action = "Try again",
-                        onAction = store::refresh,
+                        // A held favorites refresh must not block retrying failed history.
+                        onAction = { scope.launch { store.reload() } },
                     ) }
                 }
-                store.conversations.isEmpty() && pins.isEmpty() -> {
+                store.conversations.isEmpty() && pins.isEmpty() &&
+                    (store.search.isNotEmpty() || store.archivedOnly || store.selectedTeam == null || store.favorites != null) -> {
                     RefreshableHistoryState { EmptyState(
                         icon = Icons.Outlined.ChatBubbleOutline,
                         title = if (store.search.isNotEmpty()) "No matches" else if (store.archivedOnly) "No archived agents" else "No agents yet",
@@ -246,11 +265,11 @@ fun AgentPage(
                             when (item) {
                                 is PinnedHistory.Item.Missing -> {
                                     val pin = item.shortcut
-                                    Card(Modifier.fillMaxWidth().clickable {
+                                    Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxWidth().clickable {
                                         nav.navigate("conversation/${android.net.Uri.encode(pin.sessionId)}") { popUpTo("home"); launchSingleTop = true }
                                     }) {
                                         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                                            PinnedAvatar(true) { Icon(Icons.Outlined.ChatBubbleOutline, contentDescription = null) }
+                                            PinnedAvatar(true) { AgentAvatar(pin.sessionId, null, size = 36.dp) }
                                             Text(pin.title, Modifier.padding(start = 12.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
                                         }
                                     }
@@ -270,6 +289,7 @@ fun AgentPage(
                                         actionBusy = store.rowActionSessionId != null,
                                         onToggle = {
                                             foldedIds = if (row.conversation.sessionId in foldedIds) foldedIds - row.conversation.sessionId else foldedIds + row.conversation.sessionId
+                                            store.saveFoldedThreadIds(account, team?.id, foldedIds.toSet())
                                         },
                                         onClick = { nav.navigate("conversation/${android.net.Uri.encode(row.conversation.sessionId)}") { popUpTo("home"); launchSingleTop = true } },
                                         selected = row.conversation.sessionId == selectedSessionId)
@@ -350,7 +370,7 @@ private fun ConversationRow(conversation: AgentConversation, pinned: Boolean, st
     ConversationRowActions(conversation.sessionId, actions, interactions, onClick) { surface, more ->
         Surface(
             modifier = Modifier.fillMaxWidth().then(surface),
-            color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.background,
+            color = if (selected) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f) else MaterialTheme.colorScheme.background,
             shape = MaterialTheme.shapes.small,
         ) {
             Row(
@@ -368,7 +388,7 @@ private fun ConversationRow(conversation: AgentConversation, pinned: Boolean, st
                     }
                 }
                 if (threads > 0) {
-                    TextButton(onClick = onToggle, modifier = Modifier.semantics {
+                    TextButton(onClick = onToggle, colors = androidx.compose.material3.ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant), modifier = Modifier.semantics {
                         stateDescription = if (folded) "Collapsed" else "Expanded"
                     }) {
                         Text("$threads")
@@ -383,7 +403,7 @@ private fun ConversationRow(conversation: AgentConversation, pinned: Boolean, st
                 } else if (status == "Unread" || HistoryStatus.unread(conversation)) {
                     Box(Modifier.size(7.dp).background(MaterialTheme.colorScheme.primary, CircleShape).semantics { stateDescription = "Unread reply" })
                 }
-                more()
+                Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (conversation.isArchived) {
                     Icon(Icons.Outlined.Archive, contentDescription = "Archived", tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(18.dp))
                 }
@@ -439,7 +459,7 @@ fun EmptyState(
     }
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NewChatComposer(nav: NavHostController) {
     val store = LocalAgentStore.current

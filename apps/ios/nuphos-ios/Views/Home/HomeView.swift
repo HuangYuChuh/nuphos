@@ -97,6 +97,9 @@ struct HomeView: View {
                 }
                 .sharedBackgroundVisibility(.hidden)
             }
+            #if DEBUG
+            .onAppear { if ProcessInfo.processInfo.arguments.contains("-show-app-icons") { showProfile = true } }
+            #endif
             .sheet(isPresented: $showProfile) {
                 ProfileSheet(user: user)
             }
@@ -106,25 +109,30 @@ struct HomeView: View {
             }
             #endif
         } detail: {
-            if let openChat {
-                ConversationView(session: openChat.session, initialPrompt: openChat.prompt)
-                    .id(openChat.id)
-                    // Compact pops back to the list's composer; wide has
-                    // no back, so this returns the column to it.
-                    .toolbar {
-                        if sizeClass == .regular {
-                            ToolbarItem(placement: .topBarLeading) {
-                                Button("New agent", systemImage: "square.and.pencil") { self.openChat = nil }
+            // One stable root. Collapsed, swapping the column's root between
+            // these views made a reopened chat appear and vanish at once: its
+            // tasks were cancelled while it stayed on screen, never loading.
+            ZStack {
+                if let openChat {
+                    ConversationView(session: openChat.session, initialPrompt: openChat.prompt)
+                        .id(openChat.id)
+                        // Compact pops back to the list's composer; wide has
+                        // no back, so this returns the column to it.
+                        .toolbar {
+                            if sizeClass == .regular {
+                                ToolbarItem(placement: .topBarLeading) {
+                                    Button("New agent", systemImage: "square.and.pencil") { self.openChat = nil }
+                                }
                             }
                         }
-                    }
-            } else if page == .agent, store != nil, sizeClass == .regular {
-                Theme.chatCanvas.ignoresSafeArea()
-                    .safeAreaInset(edge: .bottom, spacing: 0) {
-                        NewChatComposer(openChat: $openChat).readableWidth()
-                    }
-            } else {
-                Theme.canvas.ignoresSafeArea()
+                } else if page == .agent, store != nil, sizeClass == .regular {
+                    Theme.chatCanvas.ignoresSafeArea()
+                        .safeAreaInset(edge: .bottom, spacing: 0) {
+                            NewChatComposer(openChat: $openChat).readableWidth()
+                        }
+                } else {
+                    Theme.canvas.ignoresSafeArea()
+                }
             }
         }
         // On the split view itself, so the detail column and pushed
@@ -162,9 +170,15 @@ struct HomeView: View {
         .onChange(of: PushNotifications.shared.pendingTarget, initial: true) { _, target in
             if target != nil { page = .agent }
         }
+        .onChange(of: PushNotifications.shared.pendingConversations, initial: true) { _, show in
+            guard show else { return }
+            PushNotifications.shared.pendingConversations = false
+            page = .agent
+            openChat = nil
+        }
     }
 
-    /// DEBUG: `-page monitoring` opens that page directly, for UI checks.
+    /// DEBUG: `-page runtimes` opens that page directly, for UI checks.
     private static var initialPage: HomePage {
         #if DEBUG
         let args = CommandLine.arguments
@@ -185,17 +199,9 @@ struct HomeView: View {
         case .connectors:
             ConnectorsPage()
                 .onAppear { titleCollapsed = false }
-        case .monitoring, .triggers:
-            // A scroll view like the Agent page, so the bar and the top
-            // edge behave the same way here.
-            ScrollView {
-                VStack(spacing: 0) {
-                    PlaceholderPage(page: page)
-                        .containerRelativeFrame(.vertical) { height, _ in height * 0.8 }
-                }
-            }
-            .background(Theme.canvas)
-            .onAppear { titleCollapsed = false }
+        case .runtimes:
+            RuntimesPage()
+                .onAppear { titleCollapsed = false }
         }
     }
 }

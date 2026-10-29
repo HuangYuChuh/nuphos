@@ -1,15 +1,14 @@
 // The tail of a Claude Code preview turn, mirroring the classic onFinish:
 // persist the assistant message (and any steered exchange segments) with
-// their tool steps, give the conversation a title, and hand the turn to the
-// memory ingest chain.
+// their tool steps, give the conversation a title, and record what the
+// agent's memory tools did this turn.
 import { randomUUID } from 'node:crypto'
 
-import { getConversationMessagesHead, syncConversationTranscript } from '@/lib/agent/db'
+import { appendTranscriptMessages, getConversationMessagesHead } from '@/lib/agent/db'
 import { mergePreviewMemoryActivity } from '@/lib/agent/memory-slots/preview-activity-store'
 import { listPlansCreatedForConversation } from '@/lib/agent/plans'
 import { partsWithoutFailureNotice } from '@/lib/claude-code-preview/codex-turn-failure'
 import { completedTurnOutput } from '@/lib/claude-code-preview/empty-turn'
-import { ingestPreviewTurn } from '@/lib/claude-code-preview/preview-recall'
 import {
   classifyPreviewInterruption,
   ensurePreviewTitle,
@@ -18,12 +17,13 @@ import {
   turnInterruptedPart,
 } from '@/lib/claude-code-preview/preview-transcript'
 
+import { finishPreviewTurnMemory } from './chat-preview-memory'
 import { transcriptTailFrame } from './errors'
 import { traceAgentChatError } from './trace'
 import { getFirstTranscriptMessage, uiMessagesToTranscript } from './transcript'
 
+import type { PreviewTurnMemory } from './chat-preview-memory'
 import type { AgentRun } from './types'
-import type { PreviewTurnMemory } from '@/lib/claude-code-preview/preview-recall'
 import type { PreviewToolStep } from '@/lib/claude-code-preview/preview-transcript'
 import type { TurnDiagnostics } from '@/lib/claude-code-preview/turn-diagnostics'
 import type { UIMessage } from 'ai'
@@ -89,7 +89,6 @@ export async function finishPreviewTurn(args: {
       input: { title: plan.title, overview: plan.overview },
       output: { planId: plan.id, status: plan.status },
     }))
-  const toolSteps = [...args.toolSteps, ...nativePlanSteps]
   const nativePlanParts = previewAssistantMessageParts({
     reasoning: '',
     text: '',
@@ -119,7 +118,7 @@ export async function finishPreviewTurn(args: {
   const transcriptMessages = uiMessagesToTranscript([...args.messages, ...tail])
 
   try {
-    await syncConversationTranscript({
+    const { count } = await appendTranscriptMessages({
       sessionId,
       userId,
       teamId,
@@ -132,9 +131,9 @@ export async function finishPreviewTurn(args: {
     })
     // Emit the stored timestamps too: download cards use them to stay with
     // their original turn instead of briefly piling onto the latest reply.
-    const stored = await getConversationMessagesHead(sessionId, userId, transcriptMessages.length)
+    const stored = await getConversationMessagesHead(sessionId, userId, count)
 
-    args.emit(transcriptTailFrame(stored, transcriptMessages.length - tail.length))
+    args.emit(transcriptTailFrame(stored, count - tail.length))
   } catch (err) {
     traceAgentChatError('agent.chat.preview_transcript_persist.error', err, run.trace, {
       message_count: transcriptMessages.length,
@@ -161,18 +160,16 @@ export async function finishPreviewTurn(args: {
         },
       )
     }
-    void ingestPreviewTurn({
+    void finishPreviewTurnMemory({
       sessionId,
       userId,
       teamId,
       requestId: args.requestId,
       memory: args.memory,
       answer,
-      toolSteps,
-      startedAt: args.startedAt,
       emitFrame: args.emit,
     }).catch((err: unknown) => {
-      traceAgentChatError('agent.chat.preview_memory_ingest.error', err, run.trace, {})
+      traceAgentChatError('agent.chat.preview_memory_finish.error', err, run.trace, {})
     })
   }
 }
@@ -231,7 +228,7 @@ export async function persistInterruptedPreviewTurn(args: {
   ])
 
   try {
-    await syncConversationTranscript({
+    const { count } = await appendTranscriptMessages({
       sessionId,
       userId,
       teamId,
@@ -244,9 +241,9 @@ export async function persistInterruptedPreviewTurn(args: {
     })
     // Emit the stored timestamps too: download cards use them to stay with
     // their original turn instead of briefly piling onto the latest reply.
-    const stored = await getConversationMessagesHead(sessionId, userId, transcriptMessages.length)
+    const stored = await getConversationMessagesHead(sessionId, userId, count)
 
-    args.emit(transcriptTailFrame(stored, transcriptMessages.length - args.steered.length - 1))
+    args.emit(transcriptTailFrame(stored, count - args.steered.length - 1))
   } catch (err) {
     traceAgentChatError('agent.chat.preview_interrupted_persist.error', err, run.trace, {
       message_count: transcriptMessages.length,
@@ -281,7 +278,7 @@ export async function persistHandedOffPreviewTurn(args: {
   ])
 
   try {
-    await syncConversationTranscript({
+    await appendTranscriptMessages({
       sessionId: args.sessionId,
       userId: args.userId,
       teamId: args.teamId,

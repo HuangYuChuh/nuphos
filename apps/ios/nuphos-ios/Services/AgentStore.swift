@@ -65,11 +65,11 @@ final class AgentStore {
 
     // MARK: - Archive
 
-    func archive(_ conversation: AgentConversation) async {
-        guard conversation.canManage, let teamId = conversation.teamId ?? selectedTeam?.id else { return }
+    func archive(sessionId: String, teamId: String?) async {
+        guard let teamId = teamId ?? selectedTeam?.id else { return }
         do {
-            try await AgentChatAPI.setArchived(token: token, teamId: teamId, sessionId: conversation.sessionId, archived: true)
-            removeFromList(conversation.sessionId)
+            try await AgentChatAPI.setArchived(token: token, teamId: teamId, sessionId: sessionId, archived: true)
+            removeFromList(sessionId)
         } catch {
             phase = .failed(error.localizedDescription)
         }
@@ -195,6 +195,16 @@ final class AgentStore {
         } catch {
             guard !Task.isCancelled, selectedTeam?.id == team.id else { return }
             agentDevicesError = true
+        }
+    }
+
+    /// Reloads devices until cancelled: every 5s, but after 1s while a host
+    /// has no fresh reading yet, since older hosts only start sampling once asked.
+    func pollAgentDevices() async {
+        for round in 0... {
+            await loadAgentDevices()
+            let settling = round < 5 && agentDevices.contains { $0.metricsStatus == "waiting" || $0.metricsStatus == "stale" }
+            do { try await Task.sleep(for: .seconds(settling ? 1 : 5)) } catch { return }
         }
     }
 
