@@ -119,7 +119,7 @@ export async function conversationSessionConfig(
   const catalogFor = runtimeCatalog(conversation, viewerUserId)
 
   if (!selection) {
-    if (viewerUserId === conversation.userId) prewarmSession(conversation, attachment)
+    if (shouldPrewarm(conversation, viewerUserId)) prewarmSession(conversation, attachment)
 
     return await sessionConfigView(storedPick(attachment), catalogFor)
   }
@@ -204,27 +204,39 @@ async function initialSessionConfig(
   return { status, options }
 }
 
-/**
- * The owner opening a conversation is the earliest sign of a next message. An
- * agent reaped while idle starts again now, so that message skips the cold start.
- */
+// Restore a reaped agent when its owner opens a recent chat; older ones are mostly just read.
+const PREWARM_WINDOW_MS = 3 * 60 * 60 * 1000
+const prewarming = new Set<string>()
+
+export function shouldPrewarm(
+  conversation: Pick<AgentConversation, 'userId' | 'lastActiveAt'>,
+  viewerUserId: string | undefined,
+  now = Date.now(),
+): boolean {
+  const age = now - conversation.lastActiveAt.getTime()
+
+  return viewerUserId === conversation.userId && age < PREWARM_WINDOW_MS
+}
+
 function prewarmSession(
   conversation: AgentConversation,
   attachment: NonNullable<ReturnType<typeof liveAttachment>>,
 ) {
+  const id = attachment.openabSessionId
+
+  if (prewarming.has(id)) return
+  prewarming.add(id)
   void withSessionClient(conversation, attachment, (client, endpoint) =>
-    restoreSessionConfigForWrite(
-      client,
-      attachment.openabSessionId,
-      conversation.userId,
-      conversation.userId,
-      () => sessionConfigRestoreContext(conversation, endpoint),
+    restoreSessionConfigForWrite(client, id, conversation.userId, conversation.userId, () =>
+      sessionConfigRestoreContext(conversation, endpoint),
     ),
-  ).catch((error: unknown) => {
-    // An unavailable runtime is not a failure here: the next prompt reports it.
-    if (error instanceof AppError) return
-    logError('agent.session.prewarm_failed', error, { session_id: conversation.sessionId })
-  })
+  )
+    .catch((error: unknown) => {
+      // An unavailable runtime is not a failure here: the next prompt reports it.
+      if (error instanceof AppError) return
+      logError('agent.session.prewarm_failed', error, { session_id: conversation.sessionId })
+    })
+    .finally(() => prewarming.delete(id))
 }
 
 /**
