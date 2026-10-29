@@ -919,7 +919,7 @@ final class ChatSession {
         var gatewayRetries = 0
         var notReadyRetries = 0
         var forceFresh = false
-        var usedFreshFallback = false
+        var fallback = ResumeFallback()
         var accepted = false
         var sendFullTranscript = false
         var rebaseTo: Int?
@@ -932,7 +932,7 @@ final class ChatSession {
         backlog = StreamBacklog()
 
         while !Task.isCancelled {
-            let shouldResume = !forceFresh && (options.explicitResume || reconnects > 0 || resumeFrom > 0)
+            let shouldResume = !forceFresh && ResumeFallback.resumes(explicit: options.explicitResume, reconnects: reconnects, framesReceived: resumeFrom)
             forceFresh = false
 
             let window = transcriptWindow(full: sendFullTranscript, rebase: rebaseTo)
@@ -1023,13 +1023,13 @@ final class ChatSession {
                     if !accepted && !shouldResume && reconnects == 0 { rejectOversizedSubmission(options.submission) }
                     return .failed(ChatPayload.tooLargeMessage)
                 }
-                let conflict = AgentChatAPI.conflict(status: status, body: bodyText)
                 debugLog("HTTP \(status): \(bodyText ?? "")")
-                switch conflict {
-                case .streamNotResumable where !isNativeRuntime && shouldResume && resumeFrom == 0 && !options.explicitResume && !usedFreshFallback:
-                    usedFreshFallback = true
+                if fallback.sendsFresh(status: status, body: bodyText, resumed: shouldResume, framesReceived: resumeFrom, explicit: options.explicitResume, nativeRuntime: isNativeRuntime) {
                     forceFresh = true
                     continue
+                }
+                let conflict = AgentChatAPI.conflict(status: status, body: bodyText)
+                switch conflict {
                 case .transcriptOutOfSync(let stored) where !sendFullTranscript:
                     if let stored, rebaseTo == nil { rebaseTo = stored } else { sendFullTranscript = true }
                     continue
