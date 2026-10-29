@@ -172,6 +172,7 @@ struct ConversationView: View {
         }
         .sheet(item: $toolDetail) { ToolDetailSheet(part: $0) }
         .sheet(isPresented: $showShare) { ShareSessionSheet(session: session).presentationDetents([.medium, .large]) }
+        .fullScreenCover(isPresented: $showDesktop) { DesktopScreen(desktop: session.makeDesktop(), title: session.title) }
         .sheet(isPresented: $showRuntimes) {
             RuntimePickerSheet(session: session) { runtime in
                 Task {
