@@ -1,9 +1,9 @@
 import { readFileSync as nuphosDeathRead } from 'node:fs'
 import { dirname as nuphosDeathDirname } from 'node:path'
 
-// Why Claude Code died, in words the person can act on. A SIGKILL while this
-// cgroup's OOM kill count went up is the memory limit; any other death keeps its
-// own reason. Either way the next message resumes the session.
+// Why the agent's CLI (Claude Code, Codex) died, in words the person can act on.
+// A SIGKILL while this cgroup's OOM kill count went up is the memory limit; any
+// other death keeps its own reason. Either way the next message resumes the session.
 const NUPHOS_CGROUP_ROOT = '/sys/fs/cgroup'
 
 function nuphosDeathText(file) {
@@ -49,18 +49,32 @@ function nuphosMemoryLimit(cgroup) {
 const nuphosCgroup = nuphosOwnCgroup()
 const nuphosOomKillsAtStart = nuphosOomKills(nuphosCgroup)
 
-export function nuphosProcessDeathMessage(
-  message,
+/**
+ * Called once, as the adapter gives up on its dead CLI. The message also goes to
+ * stderr under a prefix OpenAB reads, so an interruption with no turn in flight
+ * (only background work running) still names its cause.
+ */
+export function nuphosProcessDeathMessage(agent, reason, cgroup, oomKillsBefore) {
+  const message = nuphosDescribeProcessDeath(agent, reason, cgroup, oomKillsBefore)
+
+  process.stderr.write(`nuphos-process-death: ${message}\n`)
+
+  return message
+}
+
+function nuphosDescribeProcessDeath(
+  agent,
+  reason,
   cgroup = nuphosCgroup,
   oomKillsBefore = nuphosOomKillsAtStart,
 ) {
-  const signal = /terminated by signal (\w+)/.exec(message)?.[1]
+  const signal = /terminated by signal (\w+)/.exec(reason)?.[1]
 
   if (signal === 'SIGKILL' && cgroup && nuphosOomKills(cgroup) > oomKillsBefore) {
     const limit = nuphosMemoryLimit(cgroup)
 
-    return `Claude Code ran out of memory: this computer's agents reached their memory limit${limit ? ` (${limit})` : ''} and the system stopped it. Send a message to continue.`
+    return `${agent} ran out of memory: this computer's agents reached their memory limit${limit ? ` (${limit})` : ''} and the system stopped it. Send a message to continue.`
   }
 
-  return `Claude Code stopped unexpectedly (${message.replace(/^Claude Code /, '')}). Send a message to continue.`
+  return `${agent} stopped unexpectedly (${reason}). Send a message to continue.`
 }
