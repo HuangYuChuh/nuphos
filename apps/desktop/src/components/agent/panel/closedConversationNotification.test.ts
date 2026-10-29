@@ -85,7 +85,7 @@ test('a failing fetch is retried and then falls back', async () => {
   })
 
   assert.equal(fetches, CLOSED_TRANSCRIPT_RETRY_DELAYS_MS.length)
-  assert.equal(notification.title, 'Nuphos')
+  assert.equal(notification.title, 'MuseAgent')
   assert.match(notification.body, /stopped while it was closed/)
 })
 

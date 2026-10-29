@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Welcome to Nuphos</title>
+    <title>Welcome to MuseAgent</title>
     <style>
       html,
       body {
@@ -24,7 +24,7 @@
       import { mountLogoIntro } from './logo-intro.js'
       const finish = () => parent.postMessage('nuphos:introFinished', '*')
       try {
-        const response = await fetch('./nuphos.json')
+        const response = await fetch('./museagent.json')
         const brand = await response.json()
         const light = new URLSearchParams(location.search).get('theme') === 'light'
         brand.theme.background = light ? '#fcfcfd' : '#18181b'

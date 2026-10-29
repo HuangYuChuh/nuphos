@@ -82,7 +82,7 @@ test('an untitled conversation falls back to the app name', () => {
       title: '   ',
       messages: [assistant(text('hi'))],
     }).title,
-    'Nuphos',
+    'MuseAgent',
   )
 })
 

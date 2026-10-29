@@ -158,7 +158,7 @@ export function isObservabilityActive(active: string): boolean {
 export function titleFromLocation(location: PageLocation): string {
   const segment = location.pathname.split('/').findLast(Boolean)
 
-  if (!segment) return 'Nuphos'
+  if (!segment) return 'MuseAgent'
 
   return decodeURIComponent(segment)
     .split('-')

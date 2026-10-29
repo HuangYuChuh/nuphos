@@ -1,0 +1,21 @@
+{
+  "name": "MuseAgent",
+  "theme": {
+    "background": "#18181b",
+    "ink": "#ffffff",
+    "bloom": ["#7d36ec", "#a77dff", "#4a41e3", "#d14fde", "#4285ff"],
+    "bloomOpacity": 0.8,
+    "shimmer": ["#7c5cff", "#19c3e6", "#ff4fb8"]
+  },
+  "mark": {
+    "viewBox": [24, 32, 80, 64],
+    "paths": [{ "d": "M24 96V32H38L64 67L90 32H104V96H88V59L64 91L40 59V96Z" }]
+  },
+  "wordmark": {
+    "text": "MuseAgent",
+    "fontSize": 64,
+    "gap": 24,
+    "font": { "weight": 700 }
+  },
+  "lockIn": { "type": "pulse" }
+}

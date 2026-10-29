@@ -124,7 +124,7 @@ export function LoginView({ onLogin }: Props) {
           <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-sm">
             <NuphosLogo className="h-12 w-12" variant="white-bg" />
           </div>
-          <h1 className="text-[20px] font-semibold text-main mb-1.5">Welcome to Nuphos</h1>
+          <h1 className="text-[20px] font-semibold text-main mb-1.5">Welcome to MuseAgent</h1>
           <p className="text-[13.5px] text-secondary leading-relaxed mb-8">
             The agent workspace for your team
           </p>

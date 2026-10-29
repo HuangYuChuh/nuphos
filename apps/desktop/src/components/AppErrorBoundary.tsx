@@ -83,7 +83,7 @@ function CrashPage({
         <header className="flex items-center gap-3">
           <NuphosLogo className="h-7 w-7 flex-shrink-0" variant="white-bg" />
           <div className="min-w-0">
-            <div className="text-[13px] font-medium text-main">Nuphos</div>
+            <div className="text-[13px] font-medium text-main">MuseAgent</div>
             <div className="text-[12px] text-tertiary">Renderer crash recovery</div>
           </div>
         </header>
@@ -95,7 +95,7 @@ function CrashPage({
             </div>
             <div className="min-w-0 flex-1">
               <h1 className="text-[20px] font-semibold leading-tight text-main">
-                Nuphos hit a renderer error
+                MuseAgent hit a renderer error
               </h1>
               <p className="mt-2 max-w-2xl text-[13.5px] leading-6 text-secondary">
                 The app caught the crash before the window went blank. Reload to return to a clean
