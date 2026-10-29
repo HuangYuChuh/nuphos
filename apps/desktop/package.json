@@ -85,8 +85,8 @@
     "vite-plugin-electron-renderer": "^0.14.6"
   },
   "build": {
-    "appId": "ai.nuphos.desktop",
-    "productName": "Nuphos",
+    "appId": "com.huangyuchuh.museagent.desktop",
+    "productName": "MuseAgent",
     "artifactName": "${productName}-${version}-${arch}.${ext}",
     "directories": {
       "output": "release",
@@ -98,7 +98,7 @@
     ],
     "protocols": [
       {
-        "name": "Nuphos",
+        "name": "MuseAgent",
         "schemes": [
           "nuphos"
         ]
@@ -129,7 +129,7 @@
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
       "extendInfo": {
-        "NSAppleEventsUsageDescription": "Nuphos uses automation to notify Computer Use when an agent turn ends."
+        "NSAppleEventsUsageDescription": "MuseAgent uses automation to notify Computer Use when an agent turn ends."
       },
       "notarize": true,
       "binaries": [
@@ -156,11 +156,10 @@
       "icon": "build/icon.png"
     },
     "publish": {
-      "provider": "s3",
-      "bucket": "nuphos-releases",
-      "region": "us-east-1",
-      "path": "desktop",
-      "acl": null
+      "provider": "github",
+      "owner": "HuangYuChuh",
+      "repo": "nuphos",
+      "releaseType": "draft"
     },
     "extraResources": [
       {

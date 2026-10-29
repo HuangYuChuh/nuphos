@@ -123,9 +123,9 @@ export async function requestEmailOtp(
   try {
     await sendEmail({
       to: normalized,
-      subject: `${code} is your Nuphos sign-in code`,
+      subject: `${code} is your MuseAgent sign-in code`,
       html: otpEmailHtml(code, from),
-      text: `Your Nuphos sign-in code is ${code}. It expires in 10 minutes.\n\n${requestedFrom(from)}\n\nIf you didn't request this, you can ignore this email.`,
+      text: `Your MuseAgent sign-in code is ${code}. It expires in 10 minutes.\n\n${requestedFrom(from)}\n\nIf you didn't request this, you can ignore this email.`,
     })
   } catch (err) {
     // Undo the stored code so the cooldown doesn't lock the user out of
@@ -237,7 +237,7 @@ function otpEmailHtml(code: string, from: SignInSource): string {
 <html>
 <body style="margin:0;padding:32px 16px;background:#f6f6f8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a1a1e">
   <div style="max-width:420px;margin:0 auto;background:#ffffff;border-radius:12px;padding:32px;border:1px solid #e6e6ea">
-    <div style="font-size:16px;font-weight:600;margin-bottom:16px">Sign in to Nuphos</div>
+    <div style="font-size:16px;font-weight:600;margin-bottom:16px">Sign in to MuseAgent</div>
     <div style="font-size:14px;color:#55555e;line-height:1.6;margin-bottom:24px">
       Use this code to finish signing in. It expires in 10 minutes.
     </div>

@@ -49,10 +49,10 @@ export async function sendNewSignInAlert(user: NuphosUser, source: SignInSource)
   try {
     await sendEmail({
       to: user.email,
-      subject: 'New sign-in to your Nuphos account',
+      subject: 'New sign-in to your MuseAgent account',
       html: alertHtml(rows),
       text: [
-        'Your Nuphos account was just signed in to from a device or place it has not used recently.',
+        'Your MuseAgent account was just signed in to from a device or place it has not used recently.',
         '',
         ...rows.map(([k, v]) => `${k}: ${v}`),
         '',
@@ -68,7 +68,7 @@ export async function sendNewSignInAlert(user: NuphosUser, source: SignInSource)
 }
 
 const NOT_YOU =
-  "Not you? Open Nuphos, go to Settings → Account → Signed-in devices and sign that device out, then reset your password from the sign-in screen. If this was you, there's nothing to do."
+  "Not you? Open MuseAgent, go to Settings → Account → Signed-in devices and sign that device out, then reset your password from the sign-in screen. If this was you, there's nothing to do."
 
 function alertHtml(rows: [string, string][]): string {
   const table = rows
@@ -82,7 +82,7 @@ function alertHtml(rows: [string, string][]): string {
 <html>
 <body style="margin:0;padding:32px 16px;background:#f6f6f8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a1a1e">
   <div style="max-width:420px;margin:0 auto;background:#ffffff;border-radius:12px;padding:32px;border:1px solid #e6e6ea">
-    <div style="font-size:16px;font-weight:600;margin-bottom:16px">New sign-in to Nuphos</div>
+    <div style="font-size:16px;font-weight:600;margin-bottom:16px">New sign-in to MuseAgent</div>
     <div style="font-size:14px;color:#55555e;line-height:1.6;margin-bottom:16px">
       Your account was just signed in to from a device or place it has not used recently.
     </div>

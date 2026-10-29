@@ -10,11 +10,11 @@ describe('buildInvitationEmail', () => {
       inviterName: 'Alice',
     })
 
-    expect(subject).toBe("You're invited to Acme on Nuphos")
+    expect(subject).toBe("You're invited to Acme on MuseAgent")
     expect(html).toContain('Alice has invited you to join')
     expect(html).toContain('<strong>Acme</strong>')
     expect(html).toContain('<strong>invitee@example.com</strong>')
-    expect(text).toContain('Alice has invited you to join Acme on Nuphos.')
+    expect(text).toContain('Alice has invited you to join Acme on MuseAgent.')
     expect(text).toContain('sign in with invitee@example.com')
   })
 
@@ -25,11 +25,11 @@ describe('buildInvitationEmail', () => {
       inviterName: '',
     })
 
-    expect(subject).toBe("You're invited to a team on Nuphos")
+    expect(subject).toBe("You're invited to a team on MuseAgent")
     // The apostrophe is HTML-escaped in the markup but plain in the text part.
     expect(html).toContain('You&#39;ve been invited to join')
     expect(html).toContain('<strong>a team</strong>')
-    expect(text).toContain("You've been invited to join a team on Nuphos.")
+    expect(text).toContain("You've been invited to join a team on MuseAgent.")
   })
 
   test('includes the app link only when appUrl is provided', () => {
