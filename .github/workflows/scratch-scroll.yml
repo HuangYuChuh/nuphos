@@ -1,0 +1,33 @@
+name: scratch ios scroll
+on:
+  push:
+    branches: ['scratch/ios-duo-hdr-suite*']
+jobs:
+  scroll:
+    runs-on: xcode-27
+    timeout-minutes: 45
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { persist-credentials: false }
+      - name: Build
+        working-directory: apps/ios
+        run: |
+          xcodebuild -project nuphos-ios.xcodeproj -scheme nuphos-ios -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/dd \
+            CODE_SIGNING_ALLOWED=NO build -quiet
+      - name: Scroll suite
+        run: |
+          udid=$(xcrun simctl list devices available -j | python3 -c '
+          import json,sys
+          d=json.load(sys.stdin)["devices"]
+          devs=[(rt,x) for rt,l in d.items() if "iOS" in rt for x in l if "iPhone" in x["name"]]
+          duo=[p for p in devs if "Duo" in p[1]["name"]]
+          rt,x=(duo or sorted(devs,key=lambda p:p[0]))[-1]
+          print(x["udid"]); print(rt, x["name"], file=sys.stderr)')
+          xcrun simctl boot "$udid"; xcrun simctl bootstatus "$udid" -b > /dev/null
+          xcrun simctl install "$udid" /tmp/dd/Build/Products/Debug-iphonesimulator/nuphos-ios.app
+          status=0; bash apps/ios/tests/scroll-simulator.sh "$udid" > /tmp/out.txt 2>&1 || status=$?
+          grep -E "passed=|FAIL|Timed out" /tmp/out.txt | sed 's/.*scroll_regression //' | cut -c1-200
+          exit $status
